@@ -1,0 +1,21 @@
+# Desarrollo
+npm run desa
+
+# Producción (test local)
+npm run prod
+
+# Build Windows
+npm run build:prod:win
+
+# Build Linux (en tu VM Debian)
+npm run build:prod:linux
+
+# Build ambos (cross-compilation)
+npm run build:prod:all
+
+# Dar permisos de ejecución
+chmod +x linux-build.sh
+
+# Ejecutar
+./linux-build.sh
+

@@ -1,7 +1,10 @@
+// src/main/services/uexService.js
+// UEX Service: Handles communication with the UEX API, including token management and data submission.
+
 const { post } = require('./uexApi')
 const settingsHelper = require('../helpers/settingsHelper')
 
-const APP_BEARER = process.env.UEX_APP_BEARER
+const APP_BEARER = process.env.UEX_APP_TOKEN
 
 function hasToken() {
   const token = settingsHelper.getSetting('settings/security/user/token')
@@ -14,7 +17,7 @@ function getUserSecret() {
 
 function validateTokens() {
   if (!APP_BEARER) {
-    throw new Error('UEX APP Bearer token not configured (.env)')
+    throw new Error('UEX_APP_TOKEN not configured in .env')
   }
 
   const userSecret = getUserSecret()
@@ -45,11 +48,11 @@ async function submitData(payload) {
     }
 
   } catch (error) {
-    console.error('[UEX] ❌ Submit failed:', error.message)
-
+    console.error('[UEX] ❌ Submit failed:', error.message, error.apiResponse ?? '')
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      apiResponse: error.apiResponse ?? null   // ← añadir esto
     }
   }
 }

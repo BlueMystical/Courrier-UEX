@@ -8,6 +8,6 @@ rem 2. Open current folder in Explorer
 start "" explorer .
 
 rem 3. Open current folder in VS Code
-start "SC-Courrier-UEX Dev Console" code .
+start "Courrier-UEX Dev Console" code .
 
 exit 0

@@ -1,15 +1,18 @@
 // src/main/main.js
-const { app, ipcMain, BrowserWindow, globalShortcut, Tray, Menu, nativeImage } = require('electron')
+
+// #region --- Dependencies ---
+
+const { app, globalShortcut, Tray, Menu, nativeImage, session } = require('electron')
 require('dotenv').config()
 const path = require('path')
 const packageJson = require('../../package.json')
-const uexService = require('./services/uexService')
-const { processOCR } = require('./services/ocrService')
-const itemCacheService = require('./services/itemCacheService')
+const fs = require('fs')
 
+// #endregion
 
-// 1. Identity configuration
-const appName = packageJson.productName || 'SC-Courrier-UEX';
+// #region --- Identity configuration ---
+
+const appName = packageJson.productName || 'Courrier-UEX';
 app.name = appName;
 
 if (process.env.VITE_DEV_SERVER_URL) {
@@ -17,17 +20,22 @@ if (process.env.VITE_DEV_SERVER_URL) {
   app.setPath('userData', userDataPath);
 }
 
-// 2. Own modules
-const windowManager = require('./windowManager')
-const settingsHelper = require('./helpers/settingsHelper')
-const fileHelper = require('./helpers/fileHelper')
-const { routeMap } = require('../shared/shortcutsConfig.cjs')
-const { session, dialog } = require('electron')
-const screenshotWatcher = require('./helpers/screenshotWatcher')
-const ocrHelper = require('./helpers/ocrHelper')
-const fs = require('fs')
+// #endregion 
 
-// --- SYSTEM TRAY ---
+// #region --- Dependencies, Own modules ---
+
+const windowManager = require('./windowManager')
+const fileHelper = require('./helpers/fileHelper')
+const { registerIpcHandlers } = require('./ipcHandlers')
+const settingsHelper = require('./helpers/settingsHelper')
+const { routeMap } = require('../shared/shortcutsConfig.cjs')
+const itemCacheService = require('./services/itemCacheService')
+const screenshotWatcher = require('./helpers/screenshotWatcher')
+
+// #endregion
+
+// #region --- SYSTEM TRAY ---
+
 let tray = null
 
 function getTrayIconPath() {
@@ -77,7 +85,10 @@ function destroyTray() {
   if (tray) { tray.destroy(); tray = null }
 }
 
-// --- SHORTCUTS ---
+// #endregion
+
+// #region --- SHORTCUTS ---
+
 function registerShortcuts() {
   globalShortcut.unregisterAll()
 
@@ -101,28 +112,46 @@ function registerShortcuts() {
   })
 }
 
-// 3. App lifecycle
+// #endregion
+
+// #region --- SCREENSHOTS ---
+
+/** Resolve the screenshots folder:
+ * 1. Use saved setting if present and folder exists
+ * 2. Fall back to SC default path if it exists
+ * 3. Return null → renderer will ask the user to configure it  */
+function resolveScreenshotsFolder() {
+  const saved = settingsHelper.getSetting('settings/paths/screenshotsFolder')
+  if (saved && fs.existsSync(saved)) return saved
+
+  const defaultPath = screenshotWatcher.getDefaultPath()
+  if (fs.existsSync(defaultPath)) return defaultPath
+
+  return null
+}
+
+function initScreenshotWatcher(win) {
+  const folder = resolveScreenshotsFolder()
+  if (folder) {
+    screenshotWatcher.startWatcher(folder, win)
+    win.webContents.send('screenshot:watcher-started', { path: folder })
+  } else {
+    win.webContents.send('screenshot:folder-missing', {
+      path: screenshotWatcher.getDefaultPath()
+    })
+  }
+}
+
+// #endregion
+
+// #region --- App lifecycle ---
+
 app.whenReady().then(async () => {
   try {
 
     console.log('🚀 App ready...')
 
-    // ─────────────────────────────
-    // UEX INITIAL SYNC (safe)
-    // ─────────────────────────────
-    //const hasToken = uexService.hasToken()
-
-    /*if (hasToken) {
-      const result = await uexService.initialSync()
-
-      if (!result.success) {
-        console.warn('[UEX] Sync skipped or failed:', result.reason)
-      }
-    } else {
-      console.warn('[UEX] No user token configured — sync skipped')
-    }
-
-    await syncStaticData()*/
+    registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initScreenshotWatcher });
 
     // ─────────────────────────────
     // NETWORK HEADER SPOOF (unchanged)
@@ -183,6 +212,7 @@ app.whenReady().then(async () => {
     // ─────────────────────────────
     win.webContents.once('did-finish-load', () => {
       initScreenshotWatcher(win)
+      itemCacheService.startBackgroundSync(win)
     })
 
   } catch (err) {
@@ -190,13 +220,10 @@ app.whenReady().then(async () => {
   }
 })
 
-
-
-
-
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   destroyTray()
+  itemCacheService.destroy()
 })
 
 app.on('window-all-closed', () => {
@@ -211,201 +238,4 @@ app.on('activate', () => {
   }
 })
 
-// 4. IPC
-ipcMain.on('open-window', (event, { route, options }) => {
-  windowManager.createWindow(route, route, options)
-})
-
-ipcMain.on('navigate-main', (event, route) => {
-  const mainWin = windowManager.getWindow('main')
-  if (mainWin) {
-    if (process.env.VITE_DEV_SERVER_URL) {
-      mainWin.loadURL(`${process.env.VITE_DEV_SERVER_URL}#${route}`)
-    } else {
-      mainWin.loadFile(path.join(__dirname, '../../dist/renderer/index.html'), { hash: route })
-    }
-  }
-})
-
-
-ipcMain.handle('uex:getCache', async () => {
-  const uexCache = require('./helpers/uexCache')
-  return {
-    terminals: uexCache.get('terminals') || [],
-    stations: uexCache.get('stations') || [],
-    commodities: uexCache.get('commodities') || [],
-    items: uexCache.get('items') || []
-  }
-})
-ipcMain.handle('uex:cacheTerminals', async (_, data) => {
-  const uexCache = require('./helpers/uexCache')
-  uexCache.set('terminals', data)
-  console.log('[UEX] ✅ Terminals cached from renderer', data?.data?.length ?? data, 'items')
-  return true
-})
-
-ipcMain.handle('uex:cacheCommodities', async (_, data) => {
-  const uexCache = require('./helpers/uexCache')
-  uexCache.set('commodities', data)
-  console.log('[UEX] ✅ Commodities cached from renderer', data?.data?.length ?? 0, 'items')
-  return true
-})
-
-// Renderer delivers fetched items catalogue → store in cache
-ipcMain.handle('uex:cacheItems', async (_, { categories, items }) => {
-  itemCacheService.receiveSyncData({ categories, items })
-  return true
-})
-
-// Renderer reports items fetch error
-ipcMain.handle('uex:cacheItemsError', async (_, errorMsg) => {
-  itemCacheService.receiveSyncError(errorMsg)
-  return true
-})
-ipcMain.handle('uex:getTerminals', async () => {
-  try {
-    const uexCache = require('./helpers/uexCache')
-    const terminals = uexCache.get('terminals') || []
-
-    return {
-      success: true,
-      terminals
-    }
-
-  } catch (err) {
-    console.error('[uex:getTerminals] ERROR:', err)
-    return {
-      success: false,
-      error: err.message
-    }
-  }
-})
-
-// ─────────────────────────────
-// TOKEN CHECK
-// ─────────────────────────────
-
-ipcMain.handle('uex:checkToken', () => {
-  return uexService.hasToken()
-})
-
-ipcMain.handle('uex:saveToken', async (event, token) => {
-  settingsHelper.setSetting('settings/security/user/token', token)
-  return true
-})
-
-// ─────────────────────────────
-// INITIAL SYNC
-// ─────────────────────────────
-
-ipcMain.handle('uex:initialSync', async () => {
-  return await uexService.initialSync()
-})
-
-
-// ─────────────────────────────
-// SUBMIT DATA
-// ─────────────────────────────
-ipcMain.handle('uex:submitData', async (event, payload) => {
-  return await uexService.submitData(payload)
-})
-
-
-
-ipcMain.handle('ocr:process', async (_, payload) => {
-  return await processOCR(payload)
-})
-
-
-ipcMain.handle('shortcuts:get', () => settingsHelper.getSetting('settings/shortcuts'))
-
-ipcMain.handle('shortcuts:update', (event, shortcuts) => {
-  settingsHelper.setSetting('settings/shortcuts', shortcuts)
-  registerShortcuts()
-  return { success: true }
-})
-
-ipcMain.handle('settings:get', (event, keyPath) => settingsHelper.getSetting(keyPath))
-
-ipcMain.handle('settings:set', (event, { keyPath, value }) => {
-  settingsHelper.setSetting(keyPath, value)
-
-  // When tray settings change, update tray state immediately
-  if (keyPath.startsWith('settings/tray/')) {
-    const minimizeToTray = settingsHelper.getSetting('settings/tray/minimizeToTray') ?? false
-    const startMinimized = settingsHelper.getSetting('settings/tray/startMinimized') ?? false
-    if (minimizeToTray || startMinimized) createTray()
-    else destroyTray()
-  }
-
-  console.log(`📡 Broadcasting settings change: ${keyPath} = ${value}`)
-  BrowserWindow.getAllWindows().forEach(win => {
-    if (win && !win.isDestroyed()) win.webContents.send('settings-updated', { keyPath, value })
-  })
-
-  return true
-})
-
-ipcMain.handle('get-version', () => app.getVersion())
-
-// ─────────────────────────────────────────────
-// SCREENSHOT WATCHER — IPC handlers
-// ─────────────────────────────────────────────
-
-/**
- * Resolve the screenshots folder:
- * 1. Use saved setting if present and folder exists
- * 2. Fall back to SC default path if it exists
- * 3. Return null → renderer will ask the user to configure it
- */
-function resolveScreenshotsFolder() {
-  const saved = settingsHelper.getSetting('settings/paths/screenshotsFolder')
-  if (saved && fs.existsSync(saved)) return saved
-
-  const defaultPath = screenshotWatcher.getDefaultPath()
-  if (fs.existsSync(defaultPath)) return defaultPath
-
-  return null
-}
-
-function initScreenshotWatcher(win) {
-  const folder = resolveScreenshotsFolder()
-  if (folder) {
-    screenshotWatcher.startWatcher(folder, win)
-    win.webContents.send('screenshot:watcher-started', { path: folder })
-  } else {
-    win.webContents.send('screenshot:folder-missing', {
-      path: screenshotWatcher.getDefaultPath()
-    })
-  }
-}
-
-// Renderer asks: what folder are we watching?
-ipcMain.handle('screenshots:get-folder', () => ({
-  folder: screenshotWatcher.getWatchedFolder(),
-  default: screenshotWatcher.getDefaultPath(),
-}))
-
-// Renderer asks: open a folder picker dialog and save the result
-ipcMain.handle('screenshots:pick-folder', async () => {
-  const win = windowManager.getWindow('main')
-  const result = await dialog.showOpenDialog(win, {
-    title: 'Select Star Citizen Screenshots Folder',
-    properties: ['openDirectory'],
-    defaultPath: screenshotWatcher.getDefaultPath(),
-  })
-
-  if (result.canceled || !result.filePaths.length) return { canceled: true }
-
-  const chosen = result.filePaths[0]
-  settingsHelper.setSetting('settings/paths/screenshotsFolder', chosen)
-  screenshotWatcher.startWatcher(chosen, win)
-  return { canceled: false, path: chosen }
-})
-
-// Renderer asks: restart watcher (e.g. after settings change)
-ipcMain.handle('screenshots:restart-watcher', () => {
-  const win = windowManager.getWindow('main')
-  if (win) initScreenshotWatcher(win)
-  return { folder: screenshotWatcher.getWatchedFolder() }
-})
+// #endregion

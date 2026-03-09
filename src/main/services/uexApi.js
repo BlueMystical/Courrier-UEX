@@ -1,3 +1,4 @@
+// src/main/services/uexApi.js
 const { net } = require('electron')
 
 const BASE_URL = 'https://api.uexcorp.uk/2.0'
@@ -45,9 +46,15 @@ function request(method, endpoint, body = null, headers = {}, attempt = 1) {
           console.warn(`[UEX] Retry ${attempt} for ${endpoint}`)
           resolve(request(method, endpoint, body, headers, attempt + 1))
         } else {
-          reject(new Error(`Request failed with status ${res.statusCode}`))
+          let parsed = null
+          try { parsed = JSON.parse(data) } catch { /* not JSON */ }
+          const err = new Error(parsed?.status ?? `Request failed with status ${res.statusCode}`)
+          err.statusCode = res.statusCode
+          err.apiResponse = parsed ?? data
+          reject(err)
         }
       })
+
     })
 
     req.on('error', reject)

@@ -1,4 +1,5 @@
 // src/renderer/vue-main.js
+
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
@@ -18,6 +19,10 @@ import Lara from '@primeuix/themes/lara'
 import Nora from '@primeuix/themes/nora'
 import { definePreset } from '@primeuix/themes'
 import 'primeicons/primeicons.css'
+
+const BASE_PRESETS = { aura: Aura, material: Material, lara: Lara, nora: Nora }
+
+// #region --- Helper Methods ---
 
 // Función para crear preset personalizado con color primario
 function createCustomPreset(basePreset, colorName, customHex = null) {
@@ -81,7 +86,21 @@ function generateColorScale(hex) {
   return scale
 }
 
-const BASE_PRESETS = { aura: Aura, material: Material, lara: Lara, nora: Nora }
+async function syncTerminalsFromRenderer() {
+  try {
+    console.log('[UEX] 🔄 Fetching terminals from renderer...')
+    const response = await fetch('https://api.uexcorp.uk/2.0/terminals')
+    const data = await response.json()
+    await window.api.invoke('uex:cacheTerminals', data)
+    console.log('[UEX] ✅ Terminals synced successfully')
+  } catch (err) {
+    console.error('[UEX] ❌ Renderer sync failed:', err)
+  }
+}
+
+// #endregion
+
+// #region Main Process
 
 ;(async () => {
   try {
@@ -157,39 +176,23 @@ const BASE_PRESETS = { aura: Aura, material: Material, lara: Lara, nora: Nora }
     // Montar la aplicación
     app.mount('#app')
 
-    async function syncTerminalsFromRenderer() {
-      try {
-        console.log('[UEX] 🔄 Fetching terminals from renderer...')
-
-        const response = await fetch('https://api.uexcorp.uk/2.0/terminals')
-        const data = await response.json()
-
-        await window.api.invoke('uex:cacheTerminals', data)
-
-        console.log('[UEX] ✅ Terminals synced successfully')
-      } catch (err) {
-        console.error('[UEX] ❌ Renderer sync failed:', err)
-      }
-    }
-
     syncTerminalsFromRenderer()
 
     // ── Item catalogue sync ───────────────────────────────────────────────────
-    // Fetch all items from UEX API and send to main process cache.
-    // Called on startup AND whenever main sends 'items-cache:request-sync' (force/24h refresh).
+    // Fetching is triggered by main process (itemCacheService) which checks the 24h TTL.
+    // The renderer ONLY fetches when main sends 'items-cache:request-sync'.
+    // Do NOT call syncItemsFromRenderer() directly here — that would bypass the TTL check.
     async function syncItemsFromRenderer() {
       try {
         console.log('[ItemCache] 🔄 Fetching item categories from renderer...')
         const BASE = 'https://api.uexcorp.uk/2.0'
 
-        // 1. Fetch categories
         const catRes = await fetch(`${BASE}/categories?type=item`)
         const catData = await catRes.json()
         if (catData.status !== 'ok') throw new Error(`categories API: ${catData.status}`)
         const categories = catData.data || []
         console.log(`[ItemCache] Found ${categories.length} categories — fetching items...`)
 
-        // 2. Fetch items per category (sequential, polite)
         const allItems = []
         for (let i = 0; i < categories.length; i++) {
           const cat = categories[i]
@@ -201,11 +204,9 @@ const BASE_PRESETS = { aura: Aura, material: Material, lara: Lara, nora: Nora }
           } catch (e) {
             console.warn(`[ItemCache] ⚠️  Category ${cat.id} (${cat.name}) failed: ${e.message}`)
           }
-          // Small delay between requests
           if (i < categories.length - 1) await new Promise(r => setTimeout(r, 200))
         }
 
-        // 3. Send to main process to cache
         await window.api.invoke('uex:cacheItems', { categories, items: allItems })
         console.log(`[ItemCache] ✅ ${allItems.length} items synced to main cache`)
 
@@ -215,9 +216,7 @@ const BASE_PRESETS = { aura: Aura, material: Material, lara: Lara, nora: Nora }
       }
     }
 
-    syncItemsFromRenderer()
-
-    // Listen for re-sync requests from main (force sync / 24h refresh)
+    // Only sync when main process explicitly requests it (after TTL check)
     window.api.on('items-cache:request-sync', () => {
       console.log('[ItemCache] 📡 Re-sync requested by main process')
       syncItemsFromRenderer()
@@ -227,4 +226,6 @@ const BASE_PRESETS = { aura: Aura, material: Material, lara: Lara, nora: Nora }
   } catch (error) {
     console.error('❌ Error initializing app:', error)
   }
-})()
+})();
+
+// #endregion

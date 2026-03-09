@@ -5,7 +5,7 @@ const fs   = require('fs')
 const path = require('path')
 const { defaultShortcuts } = require('../../shared/shortcutsConfig.cjs')
 
-const settingsFile = path.join(app.getPath('userData'), 'settings.json'); //<- %APPDATA%\SC-Courrier-UEX
+const settingsFile = path.join(app.getPath('userData'), 'settings.json'); //<- %APPDATA%\Courrier-UEX
 console.log('Settings file path:', settingsFile);
 
 const defaultSettings = {

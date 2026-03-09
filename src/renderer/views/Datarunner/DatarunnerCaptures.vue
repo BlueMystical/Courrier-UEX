@@ -8,7 +8,7 @@
         <InputGroupAddon class="watcher-addon"><span class="status-dot"></span></InputGroupAddon>
         <InputText :value="watcherStatusText" readonly class="watcher-text" />
         <Button icon="pi pi-send" label="Submit All" class="watcher-btn-submit"
-          :disabled="!captures.some(c => c.status === 'ready')"
+          :disabled="!captures.some(c => c.status === 'ready' || c.status === 'submit-error')"
           @click="submitAll" />
         <Button icon="pi pi-plus-circle" label="Manual Entry" @click="addManualCapture" class="watcher-btn-manual" />
         <Button icon="pi pi-folder-open" label="Screenshots" class="watcher-btn" @click="openScreenshotsFolder" />
@@ -19,9 +19,25 @@
     <div class="captures-scroll">
 
       <div v-for="(capture, cIndex) in captures" :key="capture.id" class="capture-block"
-        :class="{ 'new-capture-anim': capture.isNew }">
+        :class="{ 'new-capture-anim': capture.isNew, 'capture-sent': capture.status === 'sent' }"
+        @click="capture.status === 'sent' && toggleSentExpand(capture.id)">
 
-        <div class="capture-header">
+        <!-- SENT: compact read-only header -->
+        <div v-if="capture.status === 'sent'" class="capture-header capture-header--sent">
+          <i class="pi pi-check-circle" style="color:#00ffcc; font-size:14px; flex-shrink:0;" />
+          <span class="sent-terminal">{{ terminalOptions.find(t => t.value === capture.terminalId)?.label ?? '—' }}</span>
+          <span class="sent-meta">{{ capture.type }} · {{ capture.mode }}</span>
+          <span class="sent-items">{{ capture.items.length }} item{{ capture.items.length !== 1 ? 's' : '' }}</span>
+          <div class="status-badge status-sent" style="margin-left:auto;">
+            <i class="pi pi-check" style="font-size:10px;" /> sent
+          </div>
+          <i :class="expandedSent.has(capture.id) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+            style="color:#555; font-size:11px; flex-shrink:0;" />
+          <Button icon="pi pi-trash" severity="danger" text rounded @click.stop="removeCaptureBlock(cIndex)" />
+        </div>
+
+        <!-- NORMAL: full editable header -->
+        <div v-else class="capture-header">
           <div style="min-width: 220px;">
             <span class="label">Terminal:</span>
             <Select v-model="capture.terminalId" :options="terminalOptions" filter autoFilterFocus optionLabel="label"
@@ -44,26 +60,28 @@
           <Button icon="pi pi-trash" severity="danger" text rounded @click="removeCaptureBlock(cIndex)" />
         </div>
 
-        <div class="capture-body">
+        <div class="capture-body" v-show="capture.status !== 'sent' || expandedSent.has(capture.id)">
 
-          <div class="preview-area" @dragover="onDragOver" @drop="onDropImage(capture, $event)">
+          <div class="preview-area" @dragover="onDragOver" @drop="capture.status !== 'sent' && onDropImage(capture, $event)">
             <img v-if="capture.previewBase64" :src="capture.previewBase64"
-              title="Click to enlarge · Double-click to replace" class="preview-img"
-              @click="openLightbox(capture.previewBase64)" @dblclick.prevent="pickImageForCapture(capture)" />
+              title="Click to enlarge · CTRL+Click to Open Externally" class="preview-img"
+              @click.exact="openLightbox(capture.previewBase64)"
+              @click.ctrl.prevent="openImageExternal(capture)"
+              @dblclick.prevent.stop="capture.status !== 'sent' && pickImageForCapture(capture)" />
             <div v-else class="no-image-placeholder" title="Click to load an image"
-              @click="pickImageForCapture(capture)">
+              @click="capture.status !== 'sent' && pickImageForCapture(capture)">
               <i class="pi pi-image"></i>
               <span>Click or drop image</span>
             </div>
           </div>
 
-          <div class="items-area">
+          <div class="items-area" :class="{ 'items-area--readonly': capture.status === 'sent' }">
 
             <div v-if="capture.status === 'processing'" class="ocr-overlay">
               <i class="pi pi-spin pi-spinner" />
               <span>Processing OCR...</span>
             </div>
-            <div v-else-if="capture.status === 'error'" class="ocr-error">
+            <div v-else-if="capture.status === 'ocr-error'" class="ocr-error">
               <i class="pi pi-exclamation-triangle" />
               <span>OCR failed — fill manually</span>
             </div>
@@ -75,7 +93,7 @@
                   <!-- id_category comes directly from the resolved item object -->
                   <Select :id="'cat-' + cIndex + '-' + iIndex" v-model="item.id_category" :options="itemCategories"
                     optionLabel="name" optionValue="id" filter autoFilterFocus size="small"
-                    @change="fetchItemsByCategory(item.id_category)" />
+                    @change="fetchItemsByCategory(item.id_category)" :class="getHeaderClass(item.id_category)"/>
                   <label :for="'cat-' + cIndex + '-' + iIndex">Category</label>
                 </FloatLabel>
               </template>
@@ -113,15 +131,14 @@
 
               <!-- ITEM -->
               <template v-if="capture.type === 'item'">
-                <FloatLabel class="item-field item-field--small">
-                  <InputText v-model.number="item.price" size="small"
+                <FloatLabel class="item-field item-field--small" :class="capture.status !== 'sent' ? getPriceClass(capture, item) : null">
+                  <InputText v-model="item.price" size="small"
                     v-tooltip.top="{
                       value: buildTooltipText(capture.type, capture.mode, getPriceHint(capture.type, item.id)),
                       showDelay: 200,
                       pt: { text: { style: 'white-space:pre-line;min-width:100px;font-size:12px;line-height:1.8;background:#111821;border:1px solid #1e2a35;color:#e6e6e6;padding:8px 12px;' } }
                     }"
-                    @focus="fetchPriceHint(capture.type, item.id)"
-                    :class="getPriceClass(capture, item)" />
+                    @focus="fetchPriceHint(capture.type, item.id)" />
                   <label>Price/item</label>
                 </FloatLabel>
               </template>
@@ -141,12 +158,12 @@
                 </FloatLabel>
               </template>
 
-              <Button icon="pi pi-times" severity="danger" text class="item-delete-btn"
+              <Button v-if="capture.status !== 'sent'" icon="pi pi-times" severity="danger" text class="item-delete-btn"
                 @click="removeItem(capture, iIndex)" />
 
             </div>
 
-            <div class="add-item-container">
+            <div v-if="capture.status !== 'sent'" class="add-item-container">
               <Button label="Add Item" icon="pi pi-plus" size="small" text @click="addNewItem(capture)"
                 style="color: #00ffcc" />
             </div>
@@ -172,6 +189,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useNotify } from '@/components/Notificaciones/Notify'
 import Select from 'primevue/select'
 import InputGroup from 'primevue/inputgroup'
 import InputGroupAddon from 'primevue/inputgroupaddon'
@@ -182,6 +200,15 @@ import FloatLabel from 'primevue/floatlabel'
 import Tooltip from 'primevue/tooltip'
 
 const vTooltip = Tooltip
+const notify   = useNotify()
+
+// ── Sent captures expand/collapse ─────────────────────────────────────────────
+const expandedSent = ref(new Set())
+function toggleSentExpand(id) {
+  const s = new Set(expandedSent.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  expandedSent.value = s
+}
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const terminals        = ref([])
@@ -429,6 +456,21 @@ function addManualCapture() {
 }
 
 const openScreenshotsFolder = () => window.api.System.openPathInExplorer(SCREENSHOTS_FOLDER)
+
+async function openImageExternal(capture) {
+  if (capture.filePath) {
+    window.api.System.openPathInExplorer(capture.filePath)
+    return
+  }
+  if (capture.fullBase64) {
+    try {
+      const filePath = await window.api.invoke('file:writeTempImage', {
+        base64: capture.fullBase64, filename: capture.filename ?? 'preview.jpg'
+      })
+      if (filePath) window.api.System.openPathInExplorer(filePath)
+    } catch (e) { console.warn('[openImageExternal] fallback failed:', e) }
+  }
+}
 function removeCaptureBlock(index) { captures.value.splice(index, 1) }
 function removeItem(cap, idx)      { cap.items.splice(idx, 1) }
 
@@ -512,9 +554,9 @@ async function processOCROnCapture(id, base64, mimeType) {
   try {
     const result = await window.api.OCR.process({ base64, mimeType })
     console.log('[OCR] Result:', result)
-    if (!result?.success) { updateCapture(id, { status: 'error' }); return }
+    if (!result?.success) { updateCapture(id, { status: 'ocr-error' }); return }
 
-    const type = result.type ?? null
+    const type = result.type === 'unknown' ? 'commodity' : (result.type ?? null)
     const mode = result.mode ?? null
     if (type === 'commodity' && !commoditiesList.value.length) await fetchCommodities()
     if (type === 'vehicle'   && !vehiclesList.value.length)    await fetchVehicles()
@@ -523,7 +565,7 @@ async function processOCROnCapture(id, base64, mimeType) {
     updateCapture(id, { terminalId: result.terminal?.id ?? null, type, mode, items: mappedItems, status: 'ready' })
   } catch (err) {
     console.error('[OCR] ❌', err)
-    updateCapture(id, { status: 'error' })
+    updateCapture(id, { status: 'ocr-error' })
   }
 }
 
@@ -547,7 +589,7 @@ function onDragOver(event) { event.preventDefault() }
 async function processScreenshot(data) {
   const id = crypto.randomUUID()
   captures.value.unshift({
-    id, filename: data.filename,
+    id, filename: data.filename, filePath: data.filePath ?? null,
     previewBase64: `data:${data.mimeType};base64,${data.base64}`,
     fullBase64: data.base64,
     terminalId: null, type: null, mode: null,
@@ -585,8 +627,13 @@ function buildPrices(capture) {
 }
 
 async function submitAll() {
-  for (const capture of captures.value) {
-    if (capture.status !== 'ready') continue
+  const pending = captures.value.filter(c => c.status === 'ready' || c.status === 'submit-error')
+  if (!pending.length) return
+
+  let successCount = 0
+  let errorCount   = 0
+
+  for (const capture of pending) {
     try {
       const payload = {
         id_terminal:   capture.terminalId,
@@ -597,12 +644,33 @@ async function submitAll() {
         screenshot:    capture.fullBase64
       }
       const result = await window.api.invoke('uex:submitData', payload)
-      updateCapture(capture.id, { status: result?.success ? 'sent' : 'error' })
-      if (!result?.success) console.warn('[submitAll] ⚠️ Error:', result)
+
+      if (result?.success) {
+        successCount++
+        updateCapture(capture.id, { status: 'sent' })
+      } else {
+        errorCount++
+        updateCapture(capture.id, { status: 'submit-error' })
+        const apiResp   = result?.apiResponse
+        const errName   = apiResp?.status ?? result?.error ?? 'Submit failed'
+        const errDetail = [
+          apiResp?.message   ? `Message: ${apiResp.message}`         : null,
+          apiResp?.data      ? `Data: ${JSON.stringify(apiResp.data)}` : null,
+          apiResp?.http_code ? `HTTP ${apiResp.http_code}`            : null
+        ].filter(Boolean).join('\n') || result?.error
+        notify.errorNotification(errName, errDetail)
+      }
     } catch (err) {
-      updateCapture(capture.id, { status: 'error' })
-      console.error('[submitAll] ❌ Error:', err)
+      errorCount++
+      updateCapture(capture.id, { status: 'submit-error' })
+      notify.errorNotification('Submit Exception', err.message, err.stack ?? null)
     }
+  }
+
+  if (successCount > 0 && errorCount === 0) {
+    notify.success(`${successCount} capture${successCount > 1 ? 's' : ''} submitted successfully`, 'Data Submitted')
+  } else if (successCount > 0 && errorCount > 0) {
+    notify.warn(`${successCount} submitted, ${errorCount} failed`, 'Partial Submit')
   }
 }
 
@@ -684,23 +752,8 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.dr-container {
-  background: #0b0f14;
-  color: #e6e6e6;
-  font-family: sans-serif;
-  height: calc(100vh - 60px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.captures-scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
+.dr-container { background: #0b0f14; color: #e6e6e6; font-family: sans-serif; height: calc(100vh - 60px); display: flex; flex-direction: column; overflow: hidden; }
+.captures-scroll { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
 .watcher-bar { padding: 12px 20px; flex-shrink: 0; border-bottom: 1px solid #1e2a35; }
 
 :deep(.custom-input-group) { border: 1px solid #1e2a35; border-radius: 4px; overflow: hidden; }
@@ -737,8 +790,10 @@ onUnmounted(() => {
 }
 .status-processing { background: #1a2a1a; color: #88ffaa; border: 1px solid #336644; }
 .status-ready      { background: #1a2a3a; color: #00ffcc; border: 1px solid #005577; }
-.status-error      { background: #2a1a1a; color: #ff6666; border: 1px solid #662222; }
-.status-sent       { background: #1a1a2a; color: #aaaaff; border: 1px solid #334488; }
+.status-error        { background: #2a1a1a; color: #ff6666; border: 1px solid #662222; }
+.status-ocr-error    { background: #2a1a1a; color: #ff6666; border: 1px solid #662222; }
+.status-submit-error { background: #2a1a1a; color: #ff9966; border: 1px solid #883322; }
+.status-sent         { background: #1a1a2a; color: #aaaaff; border: 1px solid #334488; }
 
 .ocr-overlay { display: flex; align-items: center; gap: 8px; color: #88ffaa; font-size: 13px; padding: 8px 0; }
 .ocr-error   { display: flex; align-items: center; gap: 8px; color: #ff6666; font-size: 13px; padding: 8px 0; }
@@ -782,5 +837,28 @@ onUnmounted(() => {
   color: #ccc; font-size: 20px; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
+.capture-sent {
+  border-color: #1a3a2a;
+  background: #0d1a14;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.capture-sent:hover { border-color: #00ffcc44; }
+
+.capture-header--sent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0;
+}
+.sent-terminal { color: #e6e6e6; font-size: 13px; font-weight: 500; }
+.sent-meta     { color: #888; font-size: 12px; }
+.sent-items    { color: #555; font-size: 12px; }
+
+.items-area--readonly {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
 .lightbox-close:hover { border-color: #00ffcc; color: #00ffcc; }
 </style>

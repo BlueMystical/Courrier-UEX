@@ -31,7 +31,7 @@ function createWindow(id, route = '/', options = {}) {
         useContentSize: true, // <--- IMPORTANTE: Hace que el área de Vue mida exactamente 961x650
         show: false,
         icon: iconPath,
-        title: packageJson.productName || 'SC-Courrier-UEX',
+        title: packageJson.productName || 'Courrier-UEX',
         backgroundColor: '#ffffff',
         webPreferences: {
             preload: path.join(__dirname, '../shared/preload.js'),

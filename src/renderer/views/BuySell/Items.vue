@@ -87,7 +87,7 @@
                                         {{ item.terminal_name }}
                                     </div>
 
-                                    <div class="col-buy label-header">Price (Total)</div>
+                                    <div class="col-buy label-header">Price</div>
                                     <div class="col-sell label-header">Buyback</div>
 
                                     <div class="col-item-name text-500 font-mono text-xs opacity-80">
@@ -95,17 +95,21 @@
                                     </div>
 
                                     <div class="col-buy price-value">
-                                        <span v-if="item.price_buy > 0"
+                                        <span v-if="item.price_buy > 0" 
                                             v-tooltip.top="'Updated: ' + formatTooltipDate(item.date_modified)"
-                                            class="text-green-500 cursor-pointer">
-                                            {{ (item.price_buy * debouncedQuantity).toLocaleString('en-US') }}
+                                            class="text-green-500 cursor-pointer animate-duration-300 animate-in fade-in zoom-in">
+                                            {{ (item.price_buy * debouncedQuantity).toLocaleString('en-US') }} <span
+                                                class="price-unit">aUEC</span>
                                         </span>
                                         <span v-else class="text-700 font-normal italic text-sm">N/A</span>
                                     </div>
 
                                     <div class="col-sell price-value">
-                                        <span v-if="item.price_sell > 0" class="text-orange-500">
-                                            {{ (item.price_sell * debouncedQuantity).toLocaleString('en-US') }}
+                                        <span v-if="item.price_sell > 0" 
+                                            v-tooltip.top="'Updated: ' + formatTooltipDate(item.date_modified)"
+                                            class="text-orange-500 cursor-pointer animate-duration-300 animate-in fade-in zoom-in">
+                                            {{ (item.price_sell * debouncedQuantity).toLocaleString('en-US') }} <span
+                                                class="price-unit">aUEC</span>
                                         </span>
                                         <span v-else class="text-500 font-normal italic text-sm">--</span>
                                     </div>
@@ -606,5 +610,13 @@ const filteredPrices = computed(() => {
     font-size: 0.7rem;
     opacity: 0.5;
     text-transform: uppercase;
+}
+
+.price-unit {
+    font-size: 0.65rem;
+    font-weight: 400;
+    opacity: 0.6;
+    margin-left: 3px;
+    vertical-align: middle;
 }
 </style>

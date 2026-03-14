@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Courrier-UEX — Privacy Policy</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #090c10;
+    --surface: #0d1117;
+    --border: #1e3a4a;
+    --accent: #00c8ff;
+    --accent2: #0077aa;
+    --green: #00e5a0;
+    --green2: #007a50;
+    --amber: #ffb84d;
+    --amber2: #7a5000;
+    --text: #c8d8e0;
+    --text-muted: #4a6a7a;
+    --mono: 'Share Tech Mono', monospace;
+    --body: 'Exo 2', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    font-weight: 300;
+    min-height: 100vh;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(0,200,255,0.03) 0px, rgba(0,200,255,0.03) 1px, transparent 1px, transparent 4px),
+      repeating-linear-gradient(90deg, rgba(0,120,180,0.015) 0px, rgba(0,120,180,0.015) 1px, transparent 1px, transparent 80px);
+    background-size: 100% 4px, 80px 100%;
+  }
+
+  .frame {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 3rem 2rem 4rem;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 3rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-logo { font-family: var(--mono); font-size: 0.7rem; color: var(--accent); letter-spacing: 0.15em; opacity: 0.7; }
+  .topbar-sep { flex: 1; height: 1px; background: var(--border); }
+  .topbar-tag { font-family: var(--mono); font-size: 0.65rem; color: var(--text-muted); letter-spacing: 0.1em; }
+
+  .header { margin-bottom: 2.5rem; }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: var(--green);
+    border: 1px solid var(--green2);
+    padding: 3px 10px;
+    margin-bottom: 1rem;
+    background: rgba(0,229,160,0.04);
+  }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: 2rem;
+    font-weight: 400;
+    color: #fff;
+    letter-spacing: 0.05em;
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+  }
+  .subtitle { font-size: 0.85rem; color: var(--text-muted); font-family: var(--mono); letter-spacing: 0.08em; }
+  .updated { font-family: var(--mono); font-size: 0.65rem; color: var(--text-muted); margin-top: 0.5rem; }
+
+  /* Status banner */
+  .status-banner {
+    border: 1px solid var(--green2);
+    background: rgba(0,229,160,0.04);
+    padding: 1rem 1.5rem;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .status-text { font-family: var(--mono); font-size: 0.78rem; color: var(--green); letter-spacing: 0.08em; }
+
+  /* Sections */
+  .section { margin-bottom: 1.5rem; }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent2);
+    margin-bottom: 0;
+  }
+  .section-num {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    opacity: 0.6;
+  }
+  .section-title {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: #fff;
+    letter-spacing: 0.1em;
+    font-weight: 400;
+  }
+
+  .section-body {
+    border: 1px solid var(--border);
+    border-top: none;
+    background: rgba(13,17,23,0.8);
+    padding: 1.5rem 1.5rem 1.5rem 1.75rem;
+  }
+
+  p {
+    font-size: 0.88rem;
+    line-height: 1.85;
+    color: var(--text);
+    margin-bottom: 0.9rem;
+  }
+  p:last-child { margin-bottom: 0; }
+
+  ul {
+    list-style: none;
+    margin: 0.5rem 0 0.9rem 0;
+  }
+  ul li {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text);
+    padding: 0.35rem 0 0.35rem 1.25rem;
+    position: relative;
+    border-bottom: 1px solid rgba(30,58,74,0.4);
+    line-height: 1.6;
+  }
+  ul li:last-child { border-bottom: none; }
+  ul li::before {
+    content: '>';
+    position: absolute;
+    left: 0;
+    color: var(--accent2);
+  }
+
+  .tag-no {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--green);
+    border: 1px solid var(--green2);
+    padding: 1px 6px;
+    margin-right: 4px;
+    vertical-align: middle;
+    background: rgba(0,229,160,0.05);
+  }
+  .tag-yes {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--amber);
+    border: 1px solid var(--amber2);
+    padding: 1px 6px;
+    margin-right: 4px;
+    vertical-align: middle;
+    background: rgba(255,184,77,0.05);
+  }
+  .tag-ext {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--accent);
+    border: 1px solid var(--accent2);
+    padding: 1px 6px;
+    margin-right: 4px;
+    vertical-align: middle;
+    background: rgba(0,200,255,0.05);
+  }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent2); padding-bottom: 1px; }
+  a:hover { color: #fff; }
+
+  .highlight { color: #fff; font-weight: 600; }
+
+  /* Contact box */
+  .contact-box {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 1.2rem 1.5rem;
+    margin-top: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .contact-box span { color: var(--accent); }
+
+  .footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .footer span { font-family: var(--mono); font-size: 0.65rem; color: var(--text-muted); letter-spacing: 0.1em; }
+  .footer a { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.1em; border: none; opacity: 0.7; }
+  .footer a:hover { opacity: 1; color: var(--accent); }
+
+  .donate-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    color: #1a1a1a;
+    background: #ffdd00;
+    border: none;
+    padding: 7px 16px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s, transform 0.1s;
+    margin-top: 2rem;
+    display: block;
+    width: fit-content;
+  }
+  .donate-btn:hover { background: #ffe733; transform: translateY(-1px); }
+
+  @media (max-width: 520px) {
+    h1 { font-size: 1.4rem; }
+    .section-body { padding: 1.2rem 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <div class="topbar">
+    <span class="topbar-logo">COURRIER-UEX</span>
+    <div class="topbar-sep"></div>
+    <span class="topbar-tag">LEGAL // PRIVACY POLICY</span>
+  </div>
+
+  <div class="header">
+    <div class="badge">DATA TRANSPARENCY</div>
+    <h1>Privacy Policy</h1>
+    <div class="subtitle">// Courrier-UEX Desktop Application</div>
+    <div class="updated" id="updated-date"></div>
+  </div>
+
+  <div class="status-banner">
+    <div class="status-dot"></div>
+    <div class="status-text">NO personal data is collected or transmitted to the developer. All sensitive data stays on your machine.</div>
+  </div>
+
+  <!-- Section 1 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <span class="section-title">WHO WE ARE</span>
+    </div>
+    <div class="section-body">
+      <p>Courrier-UEX is a free, open-source desktop application developed by <span class="highlight">BlueMystic</span> and distributed exclusively via <span class="highlight">GitHub Releases</span>. It is a companion tool for players of Star Citizen, interfacing with the UEX Corp public API to display market and trading data.</p>
+      <p>The application is not affiliated with Cloud Imperium Games or UEX Corp beyond using their public API.</p>
+    </div>
+  </div>
+
+  <!-- Section 2 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <span class="section-title">DATA WE DO NOT COLLECT</span>
+    </div>
+    <div class="section-body">
+      <p>The developer operates no servers, databases, or analytics services. We <span class="highlight">never</span> collect, receive, or store:</p>
+      <ul>
+        <li><span class="tag-no">NO</span> Crash reports or telemetry</li>
+        <li><span class="tag-no">NO</span> Usage statistics or analytics</li>
+        <li><span class="tag-no">NO</span> IP addresses or device identifiers</li>
+        <li><span class="tag-no">NO</span> Your Star Citizen username or handle</li>
+        <li><span class="tag-no">NO</span> Your UEX secret key or any tokens</li>
+        <li><span class="tag-no">NO</span> Any data beyond what stays on your own device</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Section 3 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <span class="section-title">DATA STORED LOCALLY ON YOUR DEVICE</span>
+    </div>
+    <div class="section-body">
+      <p>The following data is stored exclusively on your local machine, in the application's user data folder (<code style="font-family:var(--mono);font-size:0.8em;color:var(--accent);">%APPDATA%\Courrier-UEX\settings.json</code>):</p>
+      <ul>
+        <li><span class="tag-yes">LOCAL</span> Your Star Citizen username / handle — used to authenticate with the UEX API</li>
+        <li><span class="tag-yes">LOCAL</span> Your UEX secret key — stored only on your device, never transmitted to the developer</li>
+        <li><span class="tag-yes">LOCAL</span> Application preferences (theme, layout, shortcuts)</li>
+      </ul>
+      <p>This data never leaves your machine except when sent directly to the UEX API (see section 4). You can delete all local data at any time by uninstalling the application or manually deleting the settings file.</p>
+    </div>
+  </div>
+
+  <!-- Section 4 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">04</span>
+      <span class="section-title">THIRD-PARTY API — UEX CORP</span>
+    </div>
+    <div class="section-body">
+      <p>Courrier-UEX communicates with the <span class="highlight">UEX Corp API</span> (<a href="https://api.uexcorp.uk" target="_blank">api.uexcorp.uk</a>) to retrieve market prices, commodity data, and to submit trading data on your behalf.</p>
+      <ul>
+        <li><span class="tag-ext">UEX</span> Your username and secret key are sent to UEX servers for authentication</li>
+        <li><span class="tag-ext">UEX</span> Price and inventory data you submit is sent to the UEX API</li>
+        <li><span class="tag-ext">UEX</span> Market data (prices, terminals, commodities) is fetched from UEX servers</li>
+      </ul>
+      <p>The handling of your data by UEX Corp is governed by their own privacy policy. Courrier-UEX has no control over UEX Corp's data practices. We recommend reviewing the <a href="https://uexcorp.space" target="_blank">UEX Corp website</a> for their terms and privacy information.</p>
+    </div>
+  </div>
+
+  <!-- Section 5 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">05</span>
+      <span class="section-title">DONATIONS</span>
+    </div>
+    <div class="section-body">
+      <p>Courrier-UEX accepts voluntary donations to support development. Donations are processed through third-party platforms (e.g. Ko-fi, GitHub Sponsors). Any personal information provided during a donation (name, email, payment data) is handled exclusively by those platforms — not by BlueMystic.</p>
+      <p>Donating does not grant any additional rights or features, and is never required to use the application.</p>
+    </div>
+  </div>
+
+  <!-- Section 6 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">06</span>
+      <span class="section-title">CHANGES TO THIS POLICY</span>
+    </div>
+    <div class="section-body">
+      <p>If this policy changes in a meaningful way, a new version will be distributed with the next application release. The updated date at the top of this document will reflect the most recent revision. Continued use of the application after an update constitutes acceptance of the revised policy.</p>
+    </div>
+  </div>
+
+  <!-- Section 7 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num">07</span>
+      <span class="section-title">CONTACT</span>
+    </div>
+    <div class="section-body">
+      <p>Questions or concerns about this privacy policy can be raised via the project's GitHub repository:</p>
+      <div class="contact-box">
+        <span>GITHUB</span>
+        <a href="https://github.com/BlueMystical/Courrier-UEX/issues" target="_blank">github.com/BlueMystical/Courrier-UEX</a>
+      </div>
+    </div>
+  </div>
+
+  <a class="donate-btn" href="https://buymeacoffee.com/blue.mystic" target="_blank">
+    ☕ Buy me a coffee — support development
+  </a>
+
+  <div class="footer">
+    <span>COURRIER-UEX &copy; <span id="year"></span> BLUEMYSTIC</span>
+    <a href="LICENSE.html">MIT License &rarr;</a>
+  </div>
+
+</div>
+<script>
+  const y = new Date().getFullYear();
+  document.getElementById('year').textContent = y;
+  document.getElementById('updated-date').textContent =
+    '// Last updated: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+</script>
+</body>
+</html>

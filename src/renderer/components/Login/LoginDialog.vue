@@ -260,9 +260,10 @@ async function handleLogin(closeCallback) {
             icon: 'pi pi-server',
             items: [
               //{ label: 'Contracts', icon: 'pi pi-book', route: '/contracts' },
-              { label: 'Datarunner Captures', icon: 'pi pi-camera', shortcut: shortcuts.datarunnerCapture, route: '/datarunner-capture' },
-              { label: 'UEX Notifications', icon: 'pi pi-bell', route: '/uex-notifications' },
-              { label: 'Where to go', icon: 'pi pi-globe', route: '/places-to-visit' }
+              { label: 'Datarunner Captures', icon: 'pi pi-camera', route: '/datarunner-capture', shortcut: shortcuts.datarunnerCapture },
+              { label: 'Where to go?', icon: 'pi pi-map-marker',   route: '/datarunner/heatmap' },
+              { label: 'UEX Notifications', icon: 'pi pi-bell',     route: '/uex-notifications' },
+              //{ label: 'Where to go', icon: 'pi pi-globe', route: '/places-to-visit' }
             ]
           }
         ],

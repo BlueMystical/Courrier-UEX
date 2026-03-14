@@ -80,6 +80,8 @@ contextBridge.exposeInMainWorld('api', {
 
     ShowOpenDialog: (options) => ipcRenderer.invoke('file:showOpenDialog', options),
     ShowSaveDialog: (options) => ipcRenderer.invoke('file:showSaveDialog', options),
+
+    getResourcesPath: () => ipcRenderer.invoke('paths:getResourcesPath'),
   },
   Files: {
     copy: (srcDir, destDir, ext) => ipcRenderer.invoke('file:copy', srcDir, destDir, ext),

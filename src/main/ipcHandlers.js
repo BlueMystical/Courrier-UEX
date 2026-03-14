@@ -109,8 +109,6 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
         return itemCacheService.getStatus()
     })
 
-    // #endregion
-
 
     ipcMain.handle('uex:submitData', async (event, payload) => {
         return await uexService.submitData(payload)
@@ -124,7 +122,6 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
         settingsHelper.setSetting('settings/security/user/token', token)
         return true
     })
-
 
     // #endregion
 
@@ -216,6 +213,15 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
             return null
         }
     })
+
+ipcMain.handle('paths:getResourcesPath', () => {
+    if (app.isPackaged) {
+        // En prod, los archivos están en resources/resources/ dentro del instalado
+        return path.join(process.resourcesPath, 'resources')
+    } else {
+        return path.join(__dirname, '../../resources')
+    }
+})
 
     // #endregion
 

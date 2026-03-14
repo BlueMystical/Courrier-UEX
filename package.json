@@ -1,7 +1,7 @@
 {
   "name": "courrier-uex",
   "productName": "Courrier-UEX",
-  "version": "0.3.10",
+  "version": "0.3.12",
   "description": "Data Courrier for UEX Corp.",
   "keywords": [],
   "author": "BlueMystic",
@@ -47,6 +47,10 @@
         ]
       },
       {
+        "from": ".env",
+        "to": ".env"
+      },
+      {
         "from": "tessdata",
         "to": "tessdata",
         "filter": [
@@ -67,15 +71,14 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
       "allowElevation": false,
       "perMachine": false,
-      "selectPerMachineByDefault": false,
-      "runAfterFinish": true,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
       "menuCategory": true,
       "shortcutName": "Courrier-UEX",
+      "runAfterFinish": true,
       "include": "resources/installer.nsh",
       "artifactName": "courrier-uex-setup-${version}.${ext}",
       "differentialPackage": false

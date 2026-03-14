@@ -24,15 +24,20 @@ const routes = [
   },
   { path: '/buysell/marketplace', component: () => import('@/views/BuySell/Marketplace.vue') },
   {
-    path: '/datarunner-capture',
-    name: 'DatarunnerCaptures',
+    path: '/datarunner-capture',    name: 'DatarunnerCaptures',
     component: () => import('./views/Datarunner/DatarunnerCaptures.vue'),
     meta: { title: 'Datarunner Captures' }
+  },
+  {
+    path: '/datarunner/heatmap',     name: 'DatarunnerHeatmap',
+    component: () => import('./views/Datarunner/DatarunnerHeatmap.vue'),
+    meta: { title: 'Terminal Heatmap' }
   },
   {
     path: '/uex-notifications', name: 'UexNotifications', component: () => import('./views/UexNotifications.vue'),
     meta: { title: 'UEX Notifications' }
   },
+  
   // otras rutas aquí
   {
     path: '/:pathMatch(.*)*',

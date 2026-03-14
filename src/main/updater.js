@@ -21,20 +21,19 @@ function setupAutoUpdater(win) {
     return
   }
 
+  // ── LOGGER ──────────────────────────────────────
   const log = require('electron-log')
   autoUpdater.logger = log
   autoUpdater.logger.transports.file.level = 'debug'
-  log.info('[Updater] Logger initialized')
+  log.info('[Updater] Logger initialized') // → %APPDATA%\Courrier-UEX\logs\main.log
+  // ────────────────────────────────────────────────
 
-  autoUpdater.setFeedURL({
-    provider: 'github',
-    owner: 'BlueMystical',
-    repo: 'Courrier-UEX',
-    releaseType: 'release'
-  })
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
-  autoUpdater.disableWebInstaller = true
+
+  // Tells electron-updater to pass /S to the NSIS installer → silent mode
+  // This is the key flag that suppresses all NSIS UI pages on update
+  autoUpdater.autoRunAppAfterInstall = true
 
   autoUpdater.on('checking-for-update', () => {
     console.log('[Updater] Checking for updates...')
@@ -56,11 +55,11 @@ function setupAutoUpdater(win) {
       if (response === 0) {
         console.log('[Updater] Starting download...')
         sendToRenderer('update-status', { status: 'downloading', percent: 0 })
-        // ── Barra de progreso en taskbar ──
         getWin()?.setProgressBar(0)
+
         autoUpdater.downloadUpdate().catch(err => {
           console.error('[Updater] Download failed:', err.message)
-          getWin()?.setProgressBar(-1) // limpiar barra
+          getWin()?.setProgressBar(-1)
           sendToRenderer('update-status', { status: 'error', message: err.message })
           dialog.showMessageBox(getWin(), {
             type: 'error',
@@ -83,31 +82,34 @@ function setupAutoUpdater(win) {
     const percent = Math.round(progress.percent)
     const speed   = Math.round(progress.bytesPerSecond / 1024)
     console.log(`[Updater] Downloading: ${percent}% at ${speed} KB/s`)
-    // ── Actualizar barra de taskbar (0.0 a 1.0) ──
     getWin()?.setProgressBar(progress.percent / 100)
     sendToRenderer('update-status', { status: 'downloading', percent, speed })
   })
 
   autoUpdater.on('update-downloaded', (info) => {
     console.log(`[Updater] Version ${info.version} ready to install`)
-    getWin()?.setProgressBar(-1) // limpiar barra
+    getWin()?.setProgressBar(-1)
     sendToRenderer('update-status', { status: 'downloaded', version: info.version })
 
     dialog.showMessageBox(getWin(), {
       type: 'info',
       title: 'Update Ready',
       message: `Version ${info.version} has been downloaded.`,
-      detail: 'Restart now to apply the update, or it will be installed automatically when you close the app.',
+      detail: 'The app will restart and update automatically.\nThis will only take a moment.',
       buttons: ['Restart Now', 'Later'],
       defaultId: 0
     }).then(({ response }) => {
-      if (response === 0) autoUpdater.quitAndInstall()
+      if (response === 0) {
+        // isSilent = true  → passes /S to NSIS, suppresses all installer UI pages
+        // isForceRunAfter = true → relaunches the app after install completes
+        autoUpdater.quitAndInstall(/* isSilent */ true, /* isForceRunAfter */ true)
+      }
     })
   })
 
   autoUpdater.on('error', (err) => {
     console.error('[Updater] Error:', err.message)
-    getWin()?.setProgressBar(-1) // limpiar barra en error
+    getWin()?.setProgressBar(-1)
     sendToRenderer('update-status', { status: 'error', message: err.message })
     dialog.showMessageBox(getWin(), {
       type: 'error',
@@ -121,6 +123,12 @@ function setupAutoUpdater(win) {
 
 function checkForUpdates() {
   if (!require('electron').app.isPackaged) return
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'BlueMystical',
+    repo: 'Courrier-UEX',
+    releaseType: 'release'
+  })
   autoUpdater.checkForUpdates()
 }
 

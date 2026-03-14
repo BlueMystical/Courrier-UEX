@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Courrier-UEX — MIT License</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #090c10;
+    --surface: #0d1117;
+    --border: #1e3a4a;
+    --accent: #00c8ff;
+    --accent2: #0077aa;
+    --text: #c8d8e0;
+    --text-muted: #4a6a7a;
+    --mono: 'Share Tech Mono', monospace;
+    --body: 'Exo 2', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    font-weight: 300;
+    min-height: 100vh;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(0,200,255,0.03) 0px, rgba(0,200,255,0.03) 1px, transparent 1px, transparent 4px),
+      repeating-linear-gradient(90deg, rgba(0,120,180,0.015) 0px, rgba(0,120,180,0.015) 1px, transparent 1px, transparent 80px);
+    background-size: 100% 4px, 80px 100%;
+  }
+
+  .frame {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 3rem 2rem 4rem;
+  }
+
+  /* Top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 3rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-logo {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    opacity: 0.7;
+  }
+  .topbar-sep { flex: 1; height: 1px; background: var(--border); }
+  .topbar-tag {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+  }
+
+  /* Header */
+  .header { margin-bottom: 2.5rem; }
+
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    border: 1px solid var(--accent2);
+    padding: 3px 10px;
+    margin-bottom: 1rem;
+    background: rgba(0, 200, 255, 0.04);
+  }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: 2rem;
+    font-weight: 400;
+    color: #fff;
+    letter-spacing: 0.05em;
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+  }
+
+  .subtitle {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    letter-spacing: 0.08em;
+  }
+
+  /* Card */
+  .card {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 2rem 2.5rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: var(--accent2);
+    opacity: 0.6;
+  }
+
+  .card-label {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    margin-bottom: 1.2rem;
+    opacity: 0.7;
+  }
+
+  .license-text {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1.9;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+
+  h2 {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+  }
+
+  p {
+    font-size: 0.9rem;
+    line-height: 1.8;
+    color: var(--text);
+    margin-bottom: 0.8rem;
+  }
+
+  .highlight {
+    color: #fff;
+    font-weight: 600;
+  }
+
+  /* Grid info */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+  .info-cell {
+    background: var(--surface);
+    padding: 1rem 1.25rem;
+  }
+  .info-cell-label {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: var(--text-muted);
+    margin-bottom: 0.3rem;
+  }
+  .info-cell-value {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--accent);
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .footer span {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+  }
+  .footer a {
+    color: var(--accent);
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+  .footer a:hover { opacity: 1; }
+
+  .donate-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    color: #1a1a1a;
+    background: #ffdd00;
+    border: none;
+    padding: 7px 16px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s, transform 0.1s;
+    margin-bottom: 1.5rem;
+  }
+  .donate-btn:hover { background: #ffe733; transform: translateY(-1px); }
+
+  @media (max-width: 520px) {
+    .info-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 1.4rem; }
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <div class="topbar">
+    <span class="topbar-logo">COURRIER-UEX</span>
+    <div class="topbar-sep"></div>
+    <span class="topbar-tag">LEGAL // LICENSE</span>
+  </div>
+
+  <div class="header">
+    <div class="badge">OPEN SOURCE</div>
+    <h1>MIT License</h1>
+    <div class="subtitle">// Free software. Free to use. Free to share.</div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-cell">
+      <div class="info-cell-label">COPYRIGHT HOLDER</div>
+      <div class="info-cell-value">BlueMystic</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-cell-label">YEAR</div>
+      <div class="info-cell-value" id="year"></div>
+    </div>
+    <div class="info-cell">
+      <div class="info-cell-label">LICENSE TYPE</div>
+      <div class="info-cell-value">MIT</div>
+    </div>
+    <div class="info-cell">
+      <div class="info-cell-label">DISTRIBUTION</div>
+      <div class="info-cell-value">GitHub Releases</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">// FULL LICENSE TEXT</div>
+    <div class="license-text" id="license-body"></div>
+  </div>
+
+  <div class="card">
+    <h2>// What this means</h2>
+    <p><span class="highlight">You are free to:</span> use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of this software — for any purpose, including commercially.</p>
+    <p><span class="highlight">Only one condition:</span> keep the copyright notice and this permission notice in all copies or substantial portions of the software.</p>
+    <p><span class="highlight">Donations:</span> Accepting voluntary donations is fully compatible with the MIT License. Donations are not a purchase — they are contributions to support continued development.</p>
+    <p><span class="highlight">No warranty:</span> This software is provided "as is". The author is not liable for any damages arising from its use.</p>
+  </div>
+
+  <a class="donate-btn" href="https://buymeacoffee.com/blue.mystic" target="_blank">
+    ☕ Buy me a coffee — support development
+  </a>
+
+  <div class="footer">
+    <span>COURRIER-UEX &copy; <span id="year2"></span> BLUEMYSTIC</span>
+    <a href="privacy.html">Privacy Policy &rarr;</a>
+  </div>
+
+</div>
+<script>
+  const y = new Date().getFullYear();
+  document.getElementById('year').textContent = y;
+  document.getElementById('year2').textContent = y;
+  document.getElementById('license-body').textContent =
+`Copyright (c) ${y} BlueMystic
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.`;
+</script>
+</body>
+</html>

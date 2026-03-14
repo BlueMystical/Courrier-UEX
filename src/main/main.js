@@ -3,10 +3,15 @@
 // #region --- Dependencies ---
 
 const { app, globalShortcut, Tray, Menu, nativeImage, session } = require('electron')
-require('dotenv').config()
 const path = require('path')
+const dotenv = require('dotenv')
 const fs = require('fs')
-const { setupAutoUpdater, checkForUpdates } = require('./updater')
+dotenv.config({
+  path: app.isPackaged
+    ? path.join(process.resourcesPath, '.env')  // PROD: dentro del instalador
+    : path.join(__dirname, '../../.env')         // DEV: raíz del proyecto
+})
+
 
 // #endregion
 
@@ -26,7 +31,7 @@ if (process.env.VITE_DEV_SERVER_URL) {
 // #region --- Dependencies, Own modules ---
 
 const windowManager = require('./windowManager')
-const fileHelper = require('./helpers/FileHelper')
+const fileHelper = require('./helpers/FileHelper')      //<- No lo usamos aqui, lo cargamos para acceder a los IPC handlers relacionados con archivos (ej: logs)
 const { registerIpcHandlers } = require('./ipcHandlers')
 const settingsHelper = require('./helpers/settingsHelper')
 const { routeMap } = require('../shared/shortcutsConfig.cjs')

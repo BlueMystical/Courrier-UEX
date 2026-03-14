@@ -114,7 +114,7 @@ async function saveReadIds() {
 }
 
 function isRead(notif) {
-    return (notif.date_read && notif.date_read > 0) || localReadIds.value.has(notif.id)
+    return localReadIds.value.has(notif.id)
 }
 
 function buildUrl(redir) {
@@ -153,6 +153,16 @@ async function loadNotifications() {
         const result = await window.api.UEX.getNotifications()
         if (result.success) {
             notifications.value = result.data
+
+            // ✅ Seedear localReadIds con lo que la API ya tiene como leído
+            // Esto evita que notifs leídas en otro cliente aparezcan como nuevas
+            result.data.forEach(n => {
+                if (n.date_read && n.date_read > 0) {
+                    localReadIds.value.add(n.id)
+                }
+            })
+            localReadIds.value = new Set(localReadIds.value) // forzar reactividad
+            await saveReadIds()  // persistir para el próximo arranque
         } else {
             error.value = result.error || 'Failed to load notifications'
         }

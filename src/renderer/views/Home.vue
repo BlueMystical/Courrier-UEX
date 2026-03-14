@@ -1,6 +1,6 @@
 <!-- src/renderer/views/Home.vue -->
 <template>
-  <div class="home-container">
+  <div class="home-container home-bg">
 
     <!-- Panel izquierdo: Logo + Usuario -->
     <div class="left-panel">
@@ -16,25 +16,54 @@
           <p class="user-role"><i class="pi pi-shield"></i>{{ store.currentUser.role || 'Usuario' }}</p>
 
           <div class="user-details">
-            <a href="https://uexcorp.space/data/home/type/commodity/?only_my_reports=1" target="_blank" class="detail-item link-item">
+            <a href="https://uexcorp.space/data/home/type/commodity/?only_my_reports=1" target="_blank"
+              class="detail-item link-item">
               <i class="pi pi-external-link"></i>
               UEX Corp Terminal
             </a>
-            <span class="detail-item">
-              <i class="pi pi-check-circle"></i>
-              Online
+          </div>
+          <br /><br />
+          <Button label="Logout" icon="pi pi-sign-out" outlined size="small" @click="handleLogout" class="logout-btn" />
+
+          <div class="legal-links">
+            <span class="detail-item link-item" @click="openLicense" style="cursor:pointer;">
+              <i class="pi pi-file"></i>
+              MIT License
+            </span>
+            <span class="detail-item link-item" @click="openPrivacy" style="cursor:pointer;">
+              <i class="pi pi-shield"></i>
+              Privacy Policy
+            </span>
+            <span class="detail-item link-item" @click="openDonate" style="cursor:pointer;">
+              <i class="pi pi-heart"></i>
+              Donate
             </span>
           </div>
 
-          <Button label="Logout" icon="pi pi-sign-out" outlined size="small" @click="handleLogout" class="logout-btn" />
         </template>
 
         <template v-else>
           <h2 class="welcome-title">Welcome</h2>
           <p class="welcome-subtitle">Please Login to continue</p>
           <Button label="Login" icon="pi pi-user" @click="showLoginDialog = true" class="login-btn" />
+
+          <div class="legal-links">
+            <span class="detail-item link-item" @click="openLicense" style="cursor:pointer;">
+              <i class="pi pi-file"></i>
+              MIT License
+            </span>
+            <span class="detail-item link-item" @click="openPrivacy" style="cursor:pointer;">
+              <i class="pi pi-shield"></i>
+              Privacy Policy
+            </span>
+            <span class="detail-item link-item" @click="openDonate" style="cursor:pointer;">
+              <i class="pi pi-heart"></i>
+              Donate
+            </span>
+          </div>
         </template>
       </div>
+
     </div>
 
     <!-- Divisor vertical -->
@@ -44,7 +73,7 @@
     <div class="right-panel" v-if="store.currentUser">
       <p class="nav-title"><i class="pi pi-th-large"></i> Features</p>
       <PanelMenu :model="navItems" multiple class="home-panelmenu">
-        <template #item="{ item }">
+        <template #item="{ item, active }">
           <!-- Item con ruta interna -->
           <router-link v-if="item.route" v-slot="{ href, navigate }" :to="item.route" custom>
             <a v-ripple class="panel-item" :href="href" @click="navigate">
@@ -58,6 +87,8 @@
           <a v-else v-ripple class="panel-item panel-item-group">
             <span :class="[item.icon, 'panel-item-icon']" />
             <span class="panel-item-label font-semibold">{{ item.label }}</span>
+            <span v-if="item.items"
+              :class="['panel-item-chevron', 'pi', active ? 'pi-chevron-down' : 'pi-chevron-right']" />
           </a>
         </template>
       </PanelMenu>
@@ -109,6 +140,19 @@ function handleLogout() {
   notify.info(`¡Goodbye ${displayName || ''}!`, 'Session closed')
 }
 
+
+async function openLicense() {
+  const resourcesPath = await window.api.Paths.getResourcesPath()
+  const normalizedPath = resourcesPath.replace(/\\/g, '/')
+  await window.api.System.openUrlInBrowser(`file:///${normalizedPath}/LICENSE.html`)
+}
+
+async function openPrivacy() {
+  const resourcesPath = await window.api.Paths.getResourcesPath()
+  const normalizedPath = resourcesPath.replace(/\\/g, '/')
+  await window.api.System.openUrlInBrowser(`file:///${normalizedPath}/privacy.html`)
+}
+
 onMounted(() => {
   //notify.alert('Welcome to SC-Courrier-UEX <a href="https://www.youtube.com/shorts/_0roBvhNkBc" target="_blank">Watch the demo</a>', 'Home')
 });
@@ -118,21 +162,48 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.home-bg {
+  background-color: var(--color-background-tertiary);
+  background-image:
+    repeating-linear-gradient(0deg,
+      rgba(80, 50, 0, 0.04) 0px, rgba(80, 50, 0, 0.04) 1px,
+      transparent 1px, transparent 4px),
+    repeating-linear-gradient(90deg,
+      rgba(0, 40, 100, 0.016) 0px, rgba(0, 40, 100, 0.016) 1px,
+      transparent 1px, transparent 80px);
+  background-size: 100% 4px, 80px 100%;
+}
+
+/* Modo oscuro — más intenso porque el fondo es oscuro */
+:global(.app-dark) .home-bg {
+  background-image:
+    repeating-linear-gradient(0deg,
+      rgba(255, 200, 80, 0.07) 0px, rgba(255, 200, 80, 0.07) 1px,
+      transparent 1px, transparent 4px),
+    repeating-linear-gradient(90deg,
+      rgba(100, 180, 255, 0.03) 0px, rgba(100, 180, 255, 0.03) 1px,
+      transparent 1px, transparent 80px);
+  background-size: 100% 4px, 80px 100%;
+}
+
 /* ── Layout principal ───────────────────────────────── */
 .home-container {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 80px); /* ← resta la altura del menubar */
+  min-height: calc(100vh - 80px);
+  /* ← resta la altura del menubar */
   padding: 2rem;
   gap: 0;
 }
+
 .home-divider-vertical {
   width: 1px;
   background: var(--p-content-border-color);
   margin: 0 0.5rem;
-  align-self: stretch;  /* ← esto ya lo tenías, queda bien */
+  align-self: stretch;
+  /* ← esto ya lo tenías, queda bien */
 }
 
 /* ── Panel izquierdo ────────────────────────────────── */
@@ -229,6 +300,13 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.panel-item-chevron {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
+  transition: transform 0.2s;
+}
+
 .panel-item-label {
   flex: 1;
   font-size: 0.875rem;
@@ -245,7 +323,9 @@ onUnmounted(() => {
 }
 
 /* ── Logo (sin cambios) ─────────────────────────────── */
-.logo-section { margin-bottom: 2rem; }
+.logo-section {
+  margin-bottom: 2rem;
+}
 
 .logo-wrapper {
   width: 180px;
@@ -267,9 +347,16 @@ onUnmounted(() => {
   border-color: var(--p-primary-400);
 }
 
-.logo-image { width: 100%; height: 100%; object-fit: contain; }
+.logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 
-.user-info-section { text-align: center; max-width: 280px; }
+.user-info-section {
+  text-align: center;
+  max-width: 280px;
+}
 
 .user-name {
   font-size: 1.5rem;
@@ -291,7 +378,10 @@ onUnmounted(() => {
   letter-spacing: 0.5px;
 }
 
-.user-role i { color: var(--p-primary-color); font-size: 0.9rem; }
+.user-role i {
+  color: var(--p-primary-color);
+  font-size: 0.9rem;
+}
 
 .user-details {
   display: flex;
@@ -311,12 +401,24 @@ onUnmounted(() => {
   transition: color 0.2s ease;
 }
 
-.detail-item i { color: var(--p-primary-color); font-size: 0.875rem; }
+.detail-item i {
+  color: var(--p-primary-color);
+  font-size: 0.875rem;
+}
 
-.link-item { cursor: pointer; }
-.link-item:hover { color: var(--p-primary-color); text-decoration: underline; }
+.link-item {
+  cursor: pointer;
+}
 
-.logout-btn, .login-btn { min-width: 140px; }
+.link-item:hover {
+  color: var(--p-primary-color);
+  text-decoration: underline;
+}
+
+.logout-btn,
+.login-btn {
+  min-width: 140px;
+}
 
 .welcome-title {
   font-size: 2rem;
@@ -331,6 +433,13 @@ onUnmounted(() => {
   margin: 0 0 2rem 0;
 }
 
+.legal-links {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
 
 
 /* ── Responsive ─────────────────────────────────────── */
@@ -339,9 +448,25 @@ onUnmounted(() => {
     flex-direction: column;
     align-items: center;
   }
-  .left-panel { flex: none; padding-right: 0; padding-bottom: 1.5rem; }
-  .home-divider { display: none; }
-  .right-panel { padding-left: 0; width: 100%; }
-  .logo-wrapper { width: 140px; height: 140px; }
+
+  .left-panel {
+    flex: none;
+    padding-right: 0;
+    padding-bottom: 1.5rem;
+  }
+
+  .home-divider {
+    display: none;
+  }
+
+  .right-panel {
+    padding-left: 0;
+    width: 100%;
+  }
+
+  .logo-wrapper {
+    width: 140px;
+    height: 140px;
+  }
 }
 </style>

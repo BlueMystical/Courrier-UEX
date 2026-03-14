@@ -1,4 +1,4 @@
-// Run this from your project root: node check_tesseract.js
+// ./check_tesseract.js
 const path = require('path')
 const fs   = require('fs')
 

@@ -1,7 +1,7 @@
 // src/main/helpers/settingsHelper.js
 
 const { app } = require('electron')
-const fs   = require('fs')
+const fs = require('fs')
 const path = require('path')
 const { defaultShortcuts } = require('../../shared/shortcutsConfig.cjs')
 
@@ -29,7 +29,10 @@ const defaultSettings = {
     // Tray defaults — both off by default
     tray: {
       minimizeToTray: false,
-      startMinimized:  false,
+      startMinimized: false,
+    },
+    uex: {
+      readNotifications: []
     },
     security: {
       rememberMe: true,
@@ -90,9 +93,9 @@ function ensureSettingsFile() {
 
     if (needsUpdate || JSON.stringify(currentSettings) !== JSON.stringify(mergedSettings)) {
       saveSettings(mergedSettings)
-      const added   = findAddedKeys(currentSettings, mergedSettings)
+      const added = findAddedKeys(currentSettings, mergedSettings)
       const removed = findRemovedKeys(currentSettings, mergedSettings)
-      if (added.length   > 0) console.log('Added keys:',   added)
+      if (added.length > 0) console.log('Added keys:', added)
       if (removed.length > 0) console.log('Removed keys:', removed)
     }
   } catch (err) {

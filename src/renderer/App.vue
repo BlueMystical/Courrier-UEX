@@ -81,6 +81,14 @@
             </div>
         </Transition>
 
+        <!-- Barra de sincronización de caché -->
+        <Transition name="fade">
+            <div v-if="store.isSyncing" class="sync-status-indicator">
+                <i class="pi pi-spin pi-sync mr-2"></i>
+                <span>&nbsp;&nbsp;{{ store.syncMessage }}</span>
+            </div>
+        </Transition>
+
     </div>
 </template>
 
@@ -158,6 +166,21 @@ async function checkUEXToken() {
     }
 }
 
+const lastSyncBadge = computed(() => {
+    if (!store.lastSync) return null;
+    const hours = Math.floor((Date.now() - store.lastSync) / (1000 * 60 * 60));
+    if (hours < 1) return '< 1h ago';
+    return `${hours}h ago`;
+});
+
+async function manualSync() {
+    if (store.isSyncing) return;
+    // Llama a los métodos de sincronización exportados desde vue-main.js
+    // NOTA: Esto requiere que dichas funciones estén disponibles globalmente o se importen.
+    // Por ahora, usaremos un evento para desacoplar.
+    window.dispatchEvent(new CustomEvent('manual-sync-request'));
+}
+
 // Computed para ocultar/mostrar menubar
 const hideMenubar = computed(() => route.meta.hideMenubar || false);
 
@@ -181,6 +204,14 @@ const menubarItems = computed(() => {
                 // Añadimos la propiedad shortcut aquí:
                 { label: 'Home', icon: PrimeIcons.HOME, route: '/', shortcut: 'Ctrl+1' },
                 { label: 'Settings', icon: PrimeIcons.COG, route: '/settings', shortcut: 'Alt+S' },
+                { separator: true },
+                {
+                    label: 'Sync Cache',
+                    icon: PrimeIcons.SYNC,
+                    command: () => manualSync(),
+                    badge: lastSyncBadge.value,
+                    disabled: store.isSyncing
+                }
             ]
         }
     ];
@@ -207,6 +238,7 @@ watch(() => toastBus.data, (newData) => {
 
 function applyDarkClass(mode) {
     const root = document.documentElement;
+    store.setColorMode(mode); // Actualizamos el store también
     if (mode === 'dark') {
         root.classList.add('app-dark');
     } else {
@@ -252,12 +284,28 @@ async function checkUEXNotifications() {
 onMounted(async () => {
     initNetworkMonitor();
 
+    // 0. VERSION CHECK (Forzar re-login tras actualización)
+    const currentAppVersion = await window.api.System.getVersion();
+    const lastVersion = await window.api.Settings.get('settings/version');
+    let versionChanged = false;
+
+    if (lastVersion && lastVersion !== '0.0.0' && lastVersion !== currentAppVersion) {
+        console.log(`[Version] Updated from ${lastVersion} to ${currentAppVersion}. Expiring session...`);
+        versionChanged = true;
+        store.setSessionExpired(true); // Marcamos que la sesión caducó por actualización
+    }
+    // Actualizamos la versión guardada para la próxima vez
+    await window.api.Settings.set('settings/version', currentAppVersion);
+
     // 1. AUTO-LOGIN
     const savedUser = await window.api.Settings.get('settings/security/user');
     const rememberMe = await window.api.Settings.get('settings/security/rememberMe');
 
-    if (savedUser && rememberMe) {
+    if (savedUser && rememberMe && !versionChanged) {
         store.login(savedUser);
+    } else if (versionChanged) {
+        // Forzamos el logout en el store si hubo cambio de versión
+        store.logout();
     }
 
     // 2. CARGAR VALOR INICIAL TIMEOUT
@@ -286,6 +334,10 @@ onMounted(async () => {
             }
         });
     }
+
+    // Inicializar colorMode desde los ajustes guardados
+    const initialColor = await window.api.Settings.get('settings/theme/color') || 'light';
+    store.setColorMode(initialColor);
 
     await checkUEXToken()
     await checkUEXNotifications()
@@ -491,5 +543,53 @@ body,
 .slide-down-enter-from,
 .slide-down-leave-to {
     transform: translateY(100%);
+}
+
+.sync-status-indicator {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 10000;
+    /* Usamos overlay para que se vea bien como elemento flotante */
+    background: var(--p-surface-overlay);
+    color: var(--p-text-color);
+    padding: 0.6rem 1.2rem;
+    border-radius: 3rem;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    font-size: 0.85rem;
+    border: 1px solid var(--p-surface-200);
+    pointer-events: none;
+    width: 320px;
+    overflow: hidden;
+    transition: background 0.3s, color 0.3s, border-color 0.3s;
+}
+
+/* En modo oscuro, suavizamos el borde */
+:deep(.app-dark) .sync-status-indicator {
+    border-color: var(--p-surface-600);
+    background: var(--p-surface-900);
+}
+
+.sync-status-indicator i {
+    color: var(--p-primary-color); /* Resaltamos el icono con el color primario */
+}
+
+.sync-status-indicator span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.5s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
 }
 </style>

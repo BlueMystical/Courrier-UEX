@@ -10,7 +10,12 @@ export const useAppStore = defineStore('app', () => {
     // Estado
     const currentUser = ref(null);
     const funcionalidades = ref([]);
-    const lastActivity = ref(Date.now()); // <--- Nuevo: Seguimiento de actividad
+    const lastActivity = ref(Date.now());
+    const sessionExpired = ref(false); // Flag para indicar que la sesión caducó por actualización
+    const isSyncing = ref(false); // Flag para indicar que la app está sincronizando datos
+    const syncMessage = ref(''); // Mensaje de progreso de sincronización
+    const lastSync = ref(null); // Fecha de la última sincronización exitosa
+    const colorMode = ref('light'); // 'light' o 'dark'
 
     // Acciones:
 
@@ -26,6 +31,7 @@ export const useAppStore = defineStore('app', () => {
             funcionalidades.value = userData.funcionalidades;
         }
 
+        sessionExpired.value = false; // Reset al loguear
         updateActivity(); // Inicializamos actividad al loguear
     }
 
@@ -33,8 +39,24 @@ export const useAppStore = defineStore('app', () => {
         currentUser.value = null;
         funcionalidades.value = []; // Limpiamos el menú al salir
     }
+
+    function setSessionExpired(val) {
+        sessionExpired.value = val;
+    }
     function setFuncionalidades(data) {
         funcionalidades.value = data;
+    }
+
+    function setSyncState(syncing, message = '') {
+        isSyncing.value = syncing;
+        syncMessage.value = message;
+        if (!syncing && !message) { // Asumimos que una llamada sin mensaje al finalizar es un éxito
+            lastSync.value = Date.now();
+        }
+    }
+
+    function setColorMode(mode) {
+        colorMode.value = mode;
     }
 
     // Acción para refrescar la marca de tiempo
@@ -46,9 +68,17 @@ export const useAppStore = defineStore('app', () => {
         currentUser,
         funcionalidades,
         lastActivity,
+        sessionExpired,
+        isSyncing,
+        syncMessage,
+        lastSync,
+        colorMode,
         login,
         logout,
+        setSessionExpired,
         setFuncionalidades,
+        setSyncState,
+        setColorMode,
         updateActivity
     };
 }, {

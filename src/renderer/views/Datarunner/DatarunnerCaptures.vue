@@ -16,9 +16,10 @@
     </div>
 
     <!-- ZONA 2: scrolleable -->
-    <div class="captures-scroll">
+    <div class="captures-scroll" ref="scrollContainer">
 
       <div v-for="(capture, cIndex) in captures" :key="capture.id" class="capture-block"
+        :id="'capture-' + capture.id"
         :class="{ 'new-capture-anim': capture.isNew, 'capture-sent': capture.status === 'sent' }"
         @click="capture.status === 'sent' && toggleSentExpand(capture.id)">
 
@@ -188,7 +189,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useNotify } from '@/components/Notificaciones/Notify'
 import Select from 'primevue/select'
 import InputGroup from 'primevue/inputgroup'
@@ -201,6 +202,7 @@ import Tooltip from 'primevue/tooltip'
 
 const vTooltip = Tooltip
 const notify   = useNotify()
+const scrollContainer = ref(null)
 
 // ── Sent captures expand/collapse ─────────────────────────────────────────────
 const expandedSent = ref(new Set())
@@ -452,6 +454,12 @@ function addManualCapture() {
   }
   captures.value.unshift(newCap)
   handleTypeChange(newCap)
+
+  nextTick(() => {
+    const el = document.getElementById('capture-' + newCap.id)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+
   setTimeout(() => updateCapture(newCap.id, { isNew: false }), 2000)
 }
 
@@ -588,13 +596,20 @@ function onDragOver(event) { event.preventDefault() }
 
 async function processScreenshot(data) {
   const id = crypto.randomUUID()
-  captures.value.unshift({
+  const newCap = {
     id, filename: data.filename, filePath: data.filePath ?? null,
     previewBase64: `data:${data.mimeType};base64,${data.base64}`,
     fullBase64: data.base64,
     terminalId: null, type: null, mode: null,
     items: [], status: 'processing', isNew: true
+  }
+  captures.value.unshift(newCap)
+
+  nextTick(() => {
+    const el = document.getElementById('capture-' + id)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   })
+
   setTimeout(() => updateCapture(id, { isNew: false }), 2000)
   await processOCROnCapture(id, data.base64, data.mimeType)
 }
@@ -685,14 +700,13 @@ const lightboxStyle = computed(() => ({
   transform: `translate(-50%, -50%) translate(${translate.value.x}px, ${translate.value.y}px) scale(${scale.value})`
 }))
 const lightboxCursor = computed(() =>
-  scale.value <= 1 ? { cursor: 'zoom-in' } : { cursor: isPanning.value ? 'grabbing' : 'grab' }
+  isPanning.value ? { cursor: 'grabbing' } : { cursor: 'grab' }
 )
 
 function onWheelZoom(event) {
-  scale.value = Math.min(6, Math.max(1, scale.value + (event.deltaY > 0 ? -0.1 : 0.1)))
+  scale.value = Math.min(6, Math.max(0.5, scale.value + (event.deltaY > 0 ? -0.1 : 0.1)))
 }
 function startPan(event) {
-  if (scale.value <= 1) return
   isPanning.value = true
   start.value = { x: event.clientX - translate.value.x, y: event.clientY - translate.value.y }
 }
@@ -775,8 +789,12 @@ onUnmounted(() => {
 :deep(.p-select.price-warning)     { border: 2px solid #4096ff !important; background-color: #111c2f !important; }
 :deep(.p-select.price-extreme)     { border: 2px solid #fadb14 !important; background-color: #2b2611 !important; }
 
-.new-capture-anim { animation: flash-border 2s ease-out; }
-@keyframes flash-border { 0% { border-color: #00ffcc; } 100% { border-color: #1e2a35; } }
+.new-capture-anim { animation: flash-highlight 2s ease-out; }
+@keyframes flash-highlight {
+  0% { border-color: #00ffcc; background: rgba(0, 255, 204, 0.15); box-shadow: 0 0 15px rgba(0, 255, 204, 0.3); }
+  50% { border-color: #00ffcc; background: rgba(0, 255, 204, 0.05); }
+  100% { border-color: #1e2a35; background: #111821; }
+}
 
 .capture-block { border: 1px solid #1e2a35; background: #111821; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
 .capture-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -833,10 +851,24 @@ onUnmounted(() => {
 .lightbox-stage    { width: 90vw; height: 90vh; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .lightbox-img      { position: absolute; top: 50%; left: 50%; transform-origin: center center; }
 .lightbox-close    {
-  position: fixed; top: 20px; right: 24px; background: transparent; border: 1px solid #555;
-  color: #ccc; font-size: 20px; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+  position: fixed; top: 20px; right: 24px; 
+  background: rgba(15, 20, 27, 0.8); /* Fondo oscuro semitransparente */
+  border: 2px solid var(--p-primary-color);
+  color: var(--p-primary-color);
+  font-size: 18px; width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
+  transition: all 0.2s ease;
+  z-index: 10001;
+  backdrop-filter: blur(4px); /* Efecto de desenfoque de fondo */
 }
+.lightbox-close:hover { 
+  transform: scale(1.1); 
+  background: var(--p-primary-color); 
+  color: #0b0f14; 
+  box-shadow: 0 0 25px var(--p-primary-color);
+}
+
 .capture-sent {
   border-color: #1a3a2a;
   background: #0d1a14;
@@ -859,6 +891,4 @@ onUnmounted(() => {
   pointer-events: none;
   opacity: 0.6;
 }
-
-.lightbox-close:hover { border-color: #00ffcc; color: #00ffcc; }
 </style>

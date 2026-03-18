@@ -10,6 +10,7 @@ console.log('Settings file path:', settingsFile);
 
 const defaultSettings = {
   settings: {
+    version: '0.0.0', // Versión de la App para detectar actualizaciones
     graphics: {
       renderer: 'opengl',
       gpuAcceleration: true

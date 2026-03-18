@@ -20,6 +20,8 @@ import Nora from '@primeuix/themes/nora'
 import { definePreset } from '@primeuix/themes'
 import 'primeicons/primeicons.css'
 
+import { useAppStore } from './AppStore'
+
 const BASE_PRESETS = { aura: Aura, material: Material, lara: Lara, nora: Nora }
 
 // #region --- Helper Methods ---
@@ -86,15 +88,61 @@ function generateColorScale(hex) {
   return scale
 }
 
-async function syncTerminalsFromRenderer() {
+async function syncTerminalsFromRenderer(store) {
   try {
     console.log('[UEX] 🔄 Fetching terminals from renderer...')
+    if (store) store.setSyncState(true, 'Syncing terminals...')
     const response = await fetch('https://api.uexcorp.uk/2.0/terminals')
     const data = await response.json()
     await window.api.invoke('uex:cacheTerminals', data)
     console.log('[UEX] ✅ Terminals synced successfully')
+    if (store) store.setSyncState(false)
   } catch (err) {
     console.error('[UEX] ❌ Renderer sync failed:', err)
+    if (store) store.setSyncState(false)
+  }
+}
+
+// ── Item catalogue sync ───────────────────────────────────────────────────
+// Fetching is triggered by main process (itemCacheService) which checks the 24h TTL.
+// The renderer ONLY fetches when main sends 'items-cache:request-sync'.
+// Do NOT call syncItemsFromRenderer() directly here — that would bypass the TTL check.
+async function syncItemsFromRenderer(store) {
+  try {
+    console.log('[ItemCache] 🔄 Fetching item categories from renderer...')
+    if (store) store.setSyncState(true, 'Syncing item categories...')
+    const BASE = 'https://api.uexcorp.uk/2.0'
+
+    const catRes = await fetch(`${BASE}/categories?type=item`)
+    const catData = await catRes.json()
+    if (catData.status !== 'ok') throw new Error(`categories API: ${catData.status}`)
+    const categories = catData.data || []
+    console.log(`[ItemCache] Found ${categories.length} categories — fetching items...`)
+
+    const allItems = []
+    for (let i = 0; i < categories.length; i++) {
+      const cat = categories[i]
+      if (store) store.setSyncState(true, `Syncing items: ${cat.name} (${i + 1}/${categories.length})`)
+      try {
+        const res = await fetch(`${BASE}/items?id_category=${cat.id}`)
+        const data = await res.json()
+        if (data.status === 'ok') allItems.push(...(data.data || []))
+        console.log(`[ItemCache]  ✓ [${i + 1}/${categories.length}] ${cat.name}: ${data.data?.length ?? 0} items`)
+      } catch (e) {
+        console.warn(`[ItemCache] ⚠️  Category ${cat.id} (${cat.name}) failed: ${e.message}`)
+      }
+      if (i < categories.length - 1) await new Promise(r => setTimeout(r, 200))
+    }
+
+    if (store) store.setSyncState(true, 'Finalizing items cache...')
+    await window.api.invoke('uex:cacheItems', { categories, items: allItems })
+    console.log(`[ItemCache] ✅ ${allItems.length} items synced to main cache`)
+    if (store) store.setSyncState(false)
+
+  } catch (err) {
+    console.error('[ItemCache] ❌ Renderer sync failed:', err)
+    if (store) store.setSyncState(false)
+    await window.api.invoke('uex:cacheItemsError', err.message)
   }
 }
 
@@ -102,7 +150,7 @@ async function syncTerminalsFromRenderer() {
 
 // #region Main Process
 
-;(async () => {
+; (async () => {
   try {
     const currentColorMode = await window.api.Settings.get('settings/theme/color')
     const currentPreset = await window.api.Settings.get('settings/theme/preset')
@@ -142,6 +190,8 @@ async function syncTerminalsFromRenderer() {
     app.use(pinia)
     console.log('  ✓ Pinia & Persistence configured')
 
+    const store = useAppStore(pinia)
+
     app.use(PrimeVue, {
       theme: {
         preset: customPreset,
@@ -166,7 +216,7 @@ async function syncTerminalsFromRenderer() {
 
     // Esperar a que el router esté listo
     await router.isReady()
-    
+
     // Si hay una ruta inicial diferente a '/', navegar a ella
     if (initialRoute && initialRoute !== '/') {
       console.log('🔗 Navigating to:', initialRoute)
@@ -176,51 +226,19 @@ async function syncTerminalsFromRenderer() {
     // Montar la aplicación
     app.mount('#app')
 
-    syncTerminalsFromRenderer()
-
-    // ── Item catalogue sync ───────────────────────────────────────────────────
-    // Fetching is triggered by main process (itemCacheService) which checks the 24h TTL.
-    // The renderer ONLY fetches when main sends 'items-cache:request-sync'.
-    // Do NOT call syncItemsFromRenderer() directly here — that would bypass the TTL check.
-    async function syncItemsFromRenderer() {
-      try {
-        console.log('[ItemCache] 🔄 Fetching item categories from renderer...')
-        const BASE = 'https://api.uexcorp.uk/2.0'
-
-        const catRes = await fetch(`${BASE}/categories?type=item`)
-        const catData = await catRes.json()
-        if (catData.status !== 'ok') throw new Error(`categories API: ${catData.status}`)
-        const categories = catData.data || []
-        console.log(`[ItemCache] Found ${categories.length} categories — fetching items...`)
-
-        const allItems = []
-        for (let i = 0; i < categories.length; i++) {
-          const cat = categories[i]
-          try {
-            const res = await fetch(`${BASE}/items?id_category=${cat.id}`)
-            const data = await res.json()
-            if (data.status === 'ok') allItems.push(...(data.data || []))
-            console.log(`[ItemCache]  ✓ [${i+1}/${categories.length}] ${cat.name}: ${data.data?.length ?? 0} items`)
-          } catch (e) {
-            console.warn(`[ItemCache] ⚠️  Category ${cat.id} (${cat.name}) failed: ${e.message}`)
-          }
-          if (i < categories.length - 1) await new Promise(r => setTimeout(r, 200))
-        }
-
-        await window.api.invoke('uex:cacheItems', { categories, items: allItems })
-        console.log(`[ItemCache] ✅ ${allItems.length} items synced to main cache`)
-
-      } catch (err) {
-        console.error('[ItemCache] ❌ Renderer sync failed:', err)
-        await window.api.invoke('uex:cacheItemsError', err.message)
-      }
-    }
+    syncTerminalsFromRenderer(store)
 
     // Only sync when main process explicitly requests it (after TTL check)
     window.api.on('items-cache:request-sync', () => {
       console.log('[ItemCache] 📡 Re-sync requested by main process')
-      syncItemsFromRenderer()
+      syncItemsFromRenderer(store)
     })
+
+    window.addEventListener('manual-sync-request', async () => {
+        console.log('[Sync] Manual sync requested by user');
+        await syncTerminalsFromRenderer(store);
+        await syncItemsFromRenderer(store);
+    });
 
     console.log('  ✓ App mounted successfully')
   } catch (error) {

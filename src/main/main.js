@@ -37,6 +37,7 @@ const settingsHelper = require('./helpers/settingsHelper')
 const { routeMap } = require('../shared/shortcutsConfig.cjs')
 const itemCacheService = require('./services/itemCacheService')
 const screenshotWatcher = require('./helpers/screenshotWatcher')
+const { setupAutoUpdater, checkForUpdates } = require('./updater')
 
 // #endregion
 

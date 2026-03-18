@@ -6,7 +6,7 @@
     <div class="left-panel">
       <div class="logo-section">
         <div class="logo-wrapper">
-          <img src="@/assets/SC-Courrier-UEX_Logo_01.png" alt="Logo" class="logo-image" />
+          <img :src="logoSrc" alt="Logo" class="logo-image" />
         </div>
       </div>
 
@@ -71,6 +71,10 @@
 
     <!-- Panel derecho: Navegación -->
     <div class="right-panel" v-if="store.currentUser">
+      <div class="welcome-header">
+        <h1 class="welcome-text">Welcome to <span class="app-name">Courrier-UEX</span></h1>
+        <p class="slogan-text">Everything you need in one place</p>
+      </div>
       <p class="nav-title"><i class="pi pi-th-large"></i> Features</p>
       <PanelMenu :model="navItems" multiple class="home-panelmenu">
         <template #item="{ item, active }">
@@ -105,7 +109,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAppStore } from '@/AppStore';
 import { useRouter } from 'vue-router';
 import Button from 'primevue/button';
@@ -117,6 +121,21 @@ const store = useAppStore();
 const router = useRouter();
 const notify = useNotify();
 const showLoginDialog = ref(false);
+
+// Cambiar el logo dinámicamente según el tema
+const logoSrc = computed(() => {
+  return store.colorMode === 'dark'
+    ? new URL('@/assets/SC-Courrier-UEX_Logo_01.png', import.meta.url).href
+    : new URL('@/assets/SC-Courrier-UEX_Logo_02.png', import.meta.url).href;
+});
+
+// Auto-show login if session expired due to update
+watch(() => store.sessionExpired, (newVal) => {
+  if (newVal) {
+    showLoginDialog.value = true;
+    notify.info('Your session has expired due to an app update. Please sign in again.', 'Version Updated');
+  }
+}, { immediate: true });
 
 // Construir el modelo del PanelMenu desde las funcionalidades del store
 // (las mismas que aparecen en el Menubar)
@@ -237,15 +256,41 @@ onUnmounted(() => {
 }
 
 .nav-title {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--p-text-muted-color);
-  margin: 0 0 0.75rem 0.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--p-text-color);
+  margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.welcome-header {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--p-surface-200);
+  padding-bottom: 1.5rem;
+}
+
+.welcome-text {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--p-text-color);
+}
+
+.app-name {
+  color: var(--p-primary-color);
+}
+
+.slogan-text {
+  font-size: 1.1rem;
+  color: var(--p-text-muted-color);
+  margin: 0.25rem 0 0 0;
+  font-weight: 400;
+}
+
+:global(.app-dark) .welcome-header {
+  border-bottom-color: var(--p-surface-800);
 }
 
 .empty-lock-icon {

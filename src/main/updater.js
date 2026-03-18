@@ -122,7 +122,12 @@ function setupAutoUpdater(win) {
 }
 
 function checkForUpdates() {
-  if (!require('electron').app.isPackaged) return
+  console.log('[Updater] Called checkForUpdates()');
+  if (!require('electron').app.isPackaged) {
+    console.log('[Updater] Skipping update check: App is not packaged.');
+    return;
+  }
+  console.log('[Updater] App is packaged, proceeding with update check.');
   autoUpdater.setFeedURL({
     provider: 'github',
     owner: 'BlueMystical',

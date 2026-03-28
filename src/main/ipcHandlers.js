@@ -214,14 +214,14 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
         }
     })
 
-ipcMain.handle('paths:getResourcesPath', () => {
-    if (app.isPackaged) {
-        // En prod, los archivos están en resources/resources/ dentro del instalado
-        return path.join(process.resourcesPath, 'resources')
-    } else {
-        return path.join(__dirname, '../../resources')
-    }
-})
+    ipcMain.handle('paths:getResourcesPath', () => {
+        if (app.isPackaged) {
+            // En prod, los archivos están en resources/resources/ dentro del instalado
+            return path.join(process.resourcesPath, 'resources')
+        } else {
+            return path.join(__dirname, '../../resources')
+        }
+    })
 
     // #endregion
 

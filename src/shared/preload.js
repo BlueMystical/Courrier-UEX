@@ -10,7 +10,9 @@ const getInitialRoute = () => {
 contextBridge.exposeInMainWorld('api', {
   getInitialRoute, // Exponer función para obtener ruta inicial
 
+  // (petición-respuesta):
   invoke: (channel, data) => ipcRenderer.invoke(channel, data),
+
   send: (channel, data) => ipcRenderer.send(channel, data),
   on: (channel, callback) => ipcRenderer.on(channel, (_, ...args) => callback(...args)),
 
@@ -28,7 +30,7 @@ contextBridge.exposeInMainWorld('api', {
 
     showOpenDialog: (options) => ipcRenderer.invoke('file:showOpenDialog', options),
     showSaveDialog: (options) => ipcRenderer.invoke('file:showSaveDialog', options),
-    ShowMessageBox: (options) => ipcRenderer.invoke('ShowMessageBox', options),
+    ShowMessageBox: (options) => ipcRenderer.invoke('dialog:showMessageBox', options),
 
     openUrlInBrowser: (url) => ipcRenderer.invoke('file:openUrlInBrowser', url),
     openPathInExplorer: (filePath) => ipcRenderer.invoke('file:openPathInExplorer', filePath),

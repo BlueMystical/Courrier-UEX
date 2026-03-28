@@ -12,11 +12,26 @@ const fsSync = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
-
+const util = require('util');
 const PathHelper = require('./PathHelper.js');
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
+
+
+// Fix for sudo-prompt compatibility with modern Node.js/Electron
+const legacyUtils = {
+  isObject: (value) => value !== null && typeof value === 'object',
+  isFunction: (value) => typeof value === 'function',
+  isString: (value) => typeof value === 'string',
+  isUndefined: (value) => value === undefined
+};
+
+Object.keys(legacyUtils).forEach(key => {
+  if (util[key] === undefined) {
+    util[key] = legacyUtils[key];
+  }
+});
 
 // #region Files and Directories
 
@@ -162,6 +177,27 @@ async function writeJSON(filePath, data, prettyPrint = true) {
 
 // #region Dialogs
 
+/** Displays a native OS dialog for opening files or directories.
+ * Although it uses the sync method internally, it returns a Promise.
+ * * @param {Object} options - Configuration options for the Open Dialog.
+ * @param {string} [options.title] - Custom title for the dialog window.
+ * @param {string} [options.defaultPath] - Absolute directory path, file path, or custom alias to open by default.
+ * @param {string} [options.buttonLabel] - Custom label for the confirmation button (e.g., "Select Image").
+ * @param {Array<{name: string, extensions: string[]}>} [options.filters] - File types to restrict selection.
+ * @param {Array<'openFile'|'openDirectory'|'multiSelections'|'showHiddenFiles'>} [options.properties] - Dialog features.
+ * @returns {Promise<string[] | undefined>} An array of selected file paths, or undefined if the dialog was cancelled.
+ * * @example
+ * const paths = await FileHelper.ShowOpenDialog({
+ * title: 'Select a Star Citizen Screenshot',
+ * defaultPath: 'C:\\Program Files\\Roberts Space Industries',
+ * buttonLabel: 'Process Image',
+ * filters: [
+ * { name: 'Images', extensions: ['jpg', 'png', 'jpeg'] },
+ * { name: 'All Files', extensions: ['*'] }
+ * ],
+ * properties: ['openFile', 'multiSelections']
+ * });
+ * if (paths) console.log('Selected:', paths[0]); */
 async function ShowOpenDialog(options) {
   try {
     const result = dialog.showOpenDialogSync(options);
@@ -171,10 +207,59 @@ async function ShowOpenDialog(options) {
   }
 }
 
+/** Displays a native OS dialog for saving files.
+ * * @param {Object} options - Configuration options for the Save Dialog.
+ * @param {string} [options.title] - Custom title for the dialog window.
+ * @param {string} [options.defaultPath] - Absolute directory path, file path, or custom alias to save by default.
+ * @param {string} [options.buttonLabel] - Custom label for the confirmation button (e.g., "Export Data").
+ * @param {Array<{name: string, extensions: string[]}>} [options.filters] - File types to restrict saving.
+ * @returns {Promise<string | null>} The chosen file path as a string, or null if the dialog was cancelled.
+ * * @example
+ * const savePath = await FileHelper.ShowSaveDialog({
+ * title: 'Export Commodities Data',
+ * defaultPath: 'commodities_export.json',
+ * filters: [
+ * { name: 'JSON Files', extensions: ['json'] }
+ * ]
+ * });
+ * if (savePath) console.log('Saving to:', savePath); */
 async function ShowSaveDialog(options) {
   try {
     const result = dialog.showSaveDialogSync(options);
     return result ? result : null;
+  } catch (error) {
+    throw new Error(error.message + error.stack);
+  }
+}
+
+/** Displays a native OS message box (alerts, confirmations, error prompts).
+ * This is non-blocking and resolves when the user clicks a button.
+ * * @param {Object} options - Configuration options for the Message Box.
+ * @param {'none'|'info'|'error'|'question'|'warning'} [options.type='none'] - Icon type displayed in the dialog.
+ * @param {string[]} [options.buttons] - Array of texts for buttons (e.g., ['Yes', 'No', 'Cancel']).
+ * @param {number} [options.defaultId] - Index of the button selected by default when the dialog opens.
+ * @param {number} [options.cancelId] - Index of the button triggered when the user cancels (e.g., presses ESC).
+ * @param {string} [options.title] - Title of the message box.
+ * @param {string} options.message - The primary content/question of the message box.
+ * @param {string} [options.detail] - Secondary, smaller text providing more context or explanations.
+ * @returns {Promise<Electron.MessageBoxReturnValue>} An object containing the index of the clicked button (`response`).
+ * * @example
+ * const userResponse = await FileHelper.showMessageBox({
+ * type: 'question',
+ * buttons: ['Install OCR', 'Use Tesseract', 'Cancel'],
+ * defaultId: 0,
+ * cancelId: 2,
+ * title: 'Missing OCR Language',
+ * message: 'English language pack is missing.',
+ * detail: 'Would you like to install it now to improve scan speeds?'
+ * });
+ * * if (userResponse.response === 0) {
+ * // User clicked 'Install OCR'
+ * } */
+async function showMessageBox(options) {
+  try {
+    const result = await dialog.showMessageBox(options);
+    return result;
   } catch (error) {
     throw new Error(error.message + error.stack);
   }
@@ -514,101 +599,156 @@ async function downloadFile(url, filePath, onProgress) {
 
 // #endregion
 
+// #region Winodws OCR
+
+/** Verifica si el OCR de Windows está listo para un idioma concreto.
+ * No requiere permisos de Administrador. */
+async function isWindowsOcrReady(requestedLang = 'en-US') {
+  if (process.platform !== 'win32') return { method: 'tesseract', reason: 'OS_NOT_WINDOWS' };
+
+  const ocrRoot = path.join(process.env.SystemRoot, 'OCR');
+  if (!fsSync.existsSync(ocrRoot)) return { method: 'tesseract', reason: 'WIN_OCR_MISSING' };
+
+  try {
+    const folders = await fs.readdir(ocrRoot);
+    
+    // 1. Buscamos el idioma pedido (sin importar Mayus/Minus)
+    const langFound = folders.find(f => f.toLowerCase() === requestedLang.toLowerCase());
+
+    if (langFound) {
+      const files = await fs.readdir(path.join(ocrRoot, langFound));
+      if (files.length > 0) {
+        return { method: 'win-ocr', reason: 'SUCCESS', lang: langFound };
+      }
+    }
+
+    // 2. Si no está el pedido, buscamos CUALQUIER otro (ej: es-ES) para no fallar
+    const fallbackLang = folders.find(f => f.includes('-'));
+    if (fallbackLang) {
+      return { method: 'win-ocr', reason: 'SUCCESS_FALLBACK', lang: fallbackLang };
+    }
+
+    return { method: 'tesseract', reason: 'OCR_LANG_MISSING' };
+  } catch (err) {
+    return { method: 'tesseract', reason: err.message };
+  }
+}
+
+async function isLanguageReady(lang = 'en-US') {
+  const ocrPath = path.join(process.env.SystemRoot, 'OCR', lang);
+  try {
+    // Si no existe la carpeta 'en-US', devolvemos false
+    if (!fsSync.existsSync(ocrPath)) return false;
+    
+    const files = await fs.readdir(ocrPath);
+    return files.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+async function isLanguageReadyEX(lang = 'en-US') {
+  return new Promise((resolve) => {
+    // Comando rápido para verificar el estado del paquete
+    const cmd = `Get-WindowsCapability -Online -Name "Language.OCR~~~${lang}~~~0.0.1.0"`;
+    
+    exec(`powershell.exe -Command "${cmd}"`, (error, stdout) => {
+      if (error) return resolve(false);
+      // Buscamos si el estado es 'Installed'
+      resolve(stdout.includes('State : Installed'));
+    });
+  });
+}
+
+/** Installs the OCR language pack by spawning a new elevated PowerShell process.
+ * This replaces sudo-prompt with a native Windows approach.
+ * * @param {string} lang - Language code (e.g., 'en-US')
+ * @returns {Promise<void>} Resolves when the elevation process is triggered. */
+function installWindowsOcr(lang = 'en-US') {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.join(__dirname, '../scripts/install-ocr-lang.ps1');
+
+    // IMPORTANTE: No usamos -Command, usamos -File. 
+    // Esto evita que PS intente interpretar el @ en la ruta.
+    const args = [
+      '-NoProfile',
+      '-ExecutionPolicy', 'Bypass',
+      '-File', scriptPath,
+      '-Language', lang
+    ];
+
+    console.log('[Node] Ejecutando script en:', scriptPath);
+
+    const child = spawn('powershell.exe', args, {
+      windowsHide: false, // Deja esto en false para ver la ventana mientras probamos
+      // shell: false // Por defecto es false, mejor así para evitar problemas de escape
+    });
+
+    let output = '';
+
+    child.stdout.on('data', (data) => {
+      const str = data.toString();
+      console.log('[PS STDOUT]:', str);
+      output += str;
+    });
+
+    child.stderr.on('data', (data) => {
+      console.error('[PS STDERR]:', data.toString());
+    });
+
+    child.on('close', (code) => {
+      console.log(`[PS Process] Cerrado con código ${code}`);
+      
+      if (output.includes('"success":true')) {
+        resolve({ success: true });
+      } else if (output.includes('UAC_CANCELLED')) {
+        reject(new Error('UAC_CANCELLED'));
+      } else {
+        reject(new Error(`Error en instalación. Código: ${code}`));
+      }
+    });
+  });
+}
+
+// #endregion
+
 // #region IPC Handlers
 
-ipcMain.handle('file:copy', async (event, srcDir, destDir, ext) => {
-  return copyFiles(srcDir, destDir, ext);
-});
+ipcMain.handle('file:copy', async (event, srcDir, destDir, ext) => { return copyFiles(srcDir, destDir, ext); });
+ipcMain.handle('file:move', async (event, srcDir, destDir, ext) => { return moveFiles(srcDir, destDir, ext); });
 
-ipcMain.handle('file:move', async (event, srcDir, destDir, ext) => {
-  return moveFiles(srcDir, destDir, ext);
-});
+ipcMain.handle('file:delete', async (event, srcDir, ext) => { return deleteFiles(srcDir, ext); });
+ipcMain.handle('file:deleteDir', async (event, dirPath) => { return deleteDirectory(dirPath); });
 
-ipcMain.handle('file:delete', async (event, srcDir, ext) => {
-  return deleteFiles(srcDir, ext);
-});
+ipcMain.handle('file:list', async (event, dir, extFilter) => { return getAllFiles(dir, extFilter); });
 
-ipcMain.handle('file:deleteDir', async (event, dirPath) => {
-  return deleteDirectory(dirPath);
-});
+ipcMain.handle('file:readAsBase64', async (_, filePath) => (await fs.readFile(filePath)).toString('base64'));
+ipcMain.handle('file:readJSON', async (event, filePath) => { return readJSON(filePath); });
+ipcMain.handle('file:writeJSON', async (event, filePath, obj) => { return writeJSON(filePath, obj); });
+ipcMain.handle('file:findFile', async (event, folderPath, pattern) => { return findFile(folderPath, pattern); });
 
-ipcMain.handle('file:list', async (event, dir, extFilter) => {
-  return getAllFiles(dir, extFilter);
-});
+ipcMain.handle('dialog:showMessageBox', async (event, options) => { return showMessageBox(options); });
+ipcMain.handle('file:showOpenDialog', async (event, options) => { return ShowOpenDialog(options); });
+ipcMain.handle('file:showSaveDialog', async (event, options) => { return ShowSaveDialog(options); });
 
-ipcMain.handle('file:readJSON', async (event, filePath) => {
-  return readJSON(filePath);
-});
-
-ipcMain.handle('file:writeJSON', async (event, filePath, obj) => {
-  return writeJSON(filePath, obj);
-});
-
-ipcMain.handle('file:findFile', async (event, folderPath, pattern) => {
-  return findFile(folderPath, pattern);
-});
-
-ipcMain.handle('file:showOpenDialog', async (event, options) => {
-  return ShowOpenDialog(options);
-});
-
-ipcMain.handle('file:showSaveDialog', async (event, options) => {
-  return ShowSaveDialog(options);
-});
-
-ipcMain.handle('ShowMessageBox', async (event, options) => {
-  try {
-    const result = await dialog.showMessageBox(options);
-    return result;
-  } catch (error) {
-    throw new Error(error.message + error.stack);
-  }
-});
-
-ipcMain.handle('file:checkExists', async (event, filePath) => {
-  return checkFileDirExists(filePath);
-});
-
-ipcMain.handle('file:ensureDir', async (event, dirPath) => {
-  return ensureDirectoryExists(dirPath);
-});
+ipcMain.handle('file:checkExists', async (event, filePath) => { return checkFileDirExists(filePath); });
+ipcMain.handle('file:ensureDir', async (event, dirPath) => { return ensureDirectoryExists(dirPath); });
 
 ipcMain.handle('file:openUrlInBrowser', (event, url) => openUrlInBrowser(url));
 ipcMain.handle('file:openPathInExplorer', (event, filePath) => openPathInExplorer(filePath));
 ipcMain.handle('file:openFile', (event, filePath) => openFile(filePath));
-ipcMain.handle('file:detectProgram', (event, exeName) =>
-  new Promise((resolve, reject) => {
-    detectProgram(exeName, (err, path) => {
-      if (err) reject(err);
-      else resolve(path);
-    });
-  })
-);
-ipcMain.handle('file:terminateProgram', (event, exeName, options) =>
-  terminateProgram(exeName, { ...options, usePromise: true })
-);
-ipcMain.handle('file:runScriptOrProgram', async (event, filePath, args) => {
-  return runScripOrProgram(filePath, args);
-});
 
-ipcMain.handle('file:downloadAsset', async (event, url, destination) => {
-  return downloadAsset(url, destination);
-});
+ipcMain.handle('file:detectProgram', (event, exeName) => { return detectProgram(exeName, (err, path)) });
+ipcMain.handle('file:terminateProgram', (event, exeName, options) => terminateProgram(exeName, { ...options, usePromise: true }));
+ipcMain.handle('file:runScriptOrProgram', async (event, filePath, args) => { return runScripOrProgram(filePath, args); });
 
-ipcMain.handle('file:downloadFile', async (event, url, filePath) => {
-  return downloadFile(url, filePath, (progress, speed) => {
-    event.sender.send('download-progress', { progress, speed });
-  });
-});
+ipcMain.handle('file:downloadAsset', async (event, url, destination) => { return downloadAsset(url, destination); });
+ipcMain.handle('file:downloadFile', async (event, url, filePath) => downloadFile(url, filePath, (progress, speed) => event.sender.send('download-progress', { progress, speed })));
 
-ipcMain.handle('file:readAsBase64', async (_, filePath) => {
-  const buf = await fs.readFile(filePath)
-  return buf.toString('base64')
-})
+ipcMain.handle('file:isWindowsOcrInstalled', async (event, lang) => { return isWindowsOcrReady(lang) })
+ipcMain.handle('file:installWindowsOcr', async (event, lang) => { return installWindowsOcr(lang) })
 
 // #endregion
 
-// Reemplazo del "export default" por "module.exports"
 module.exports = {
   ensureDirectoryExists,
   checkFileDirExists,
@@ -620,6 +760,7 @@ module.exports = {
   findFile,
   readJSON,
   writeJSON,
+  showMessageBox,
   ShowOpenDialog,
   ShowSaveDialog,
   openUrlInBrowser,
@@ -629,5 +770,7 @@ module.exports = {
   terminateProgram,
   runScripOrProgram,
   downloadAsset,
-  downloadFile
+  downloadFile,
+  isWindowsOcrReady,
+  installWindowsOcr
 };

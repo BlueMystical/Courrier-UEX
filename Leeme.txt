@@ -39,7 +39,8 @@ https://uexcorp.space/api/documentation/id/post_data_submit/
 
 C:\Program Files\Roberts Space Industries\StarCitizen\LIVE\screenshots
 
-https://github.com/BlueMystical/Courrier-UEX
+Github Courrier-UEX:    https://github.com/BlueMystical/Courrier-UEX
+Discord Courrier-UEX:   https://discord.gg/Bz6UkBDPMp
 ----------------------------------------------------------------
 
 

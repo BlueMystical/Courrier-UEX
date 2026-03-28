@@ -1,415 +1,260 @@
 // src/main/helpers/ocrHelper.js
-// OCR pipeline: sharp preprocessing → Tesseract.js text extraction.
-// Runs in the main process (Node.js) to avoid bundling issues with Tesseract workers.
+//
+// Wrapper for Windows.Media.OCR (WinRT) via PowerShell.
+// Falls back to Tesseract CLI on Linux/macOS automatically.
 
+'use strict'
+
+const { app } = require('electron');
+const { execFile } = require('child_process')
 const path = require('path')
+const fs = require('fs')
+const os = require('os')
 
-// Lazy-load heavy deps so startup time is unaffected
-let sharp     = null
-let Tesseract = null
 
-function loadDeps() {
-  if (!sharp)     sharp     = require('sharp')
-  if (!Tesseract) Tesseract = require('tesseract.js')
-}
+// ── Path resolution ──────────────────────────────────────────────────────────
+// The PS1 script lives next to this file in dev, but is copied to dist/main/scripts
+// when building (build-main.js already copies src/main/** recursively).
+// Variables para "cachear" las rutas y no recalcularlas en cada pasada de OCR
 
-/**
- * Preprocess a raw image buffer with sharp to maximize OCR accuracy.
- *
- * Strategy:
- * 1. Crop to the RIGHT 35% of the image — this is always where the SC
- *    terminal panel lives (SHOP INVENTORY / item grid). The left side
- *    is the 3D game scene which produces garbage OCR output.
- * 2. Scale up 2x so small text is larger for Tesseract.
- * 3. Greyscale + normalize contrast.
- * 4. Threshold to pure black/white — eliminates texture noise from
- *    the game's UI background gradients.
- *
- * @param {Buffer} inputBuffer - Raw image bytes (jpg or png)
- * @returns {Promise<Buffer>} Processed PNG buffer
- */
-async function preprocessImage(inputBuffer) {
-  loadDeps()
+let cachedTesseractPath = null;
+let cachedTessdataPath = null;
 
-  // Get image dimensions first
-  const meta = await sharp(inputBuffer).metadata()
-  const { width, height } = meta
-
-  // Crop to right 37% of the image (the terminal panel)
-  // SC terminals always render their data panel on the right side
-  const cropLeft  = Math.floor(width * 0.63)
-  const cropWidth = width - cropLeft
-
-  return sharp(inputBuffer)
-    .extract({ left: cropLeft, top: 0, width: cropWidth, height })
-    .resize({ width: cropWidth * 2 })     // upscale 2x for better OCR on small text
-    .greyscale()
-    .normalize()                           // stretch histogram → max contrast
-    .threshold(140)                        // binarize: kills UI texture noise
-    .sharpen({ sigma: 0.8 })
-    .png()
-    .toBuffer()
-}
-
-/**
- * Run Tesseract OCR on a preprocessed image buffer.
- *
- * @param {Buffer} imageBuffer - Preprocessed PNG buffer
- * @returns {Promise<string>} Raw extracted text
- */
-async function runTesseract(imageBuffer) {
-  loadDeps()
-
-  const path = require('path')
-  const fs   = require('fs')
-
-  // Tesseract.js v7 looks for lang files in <package>/lang-data/
-  // Files needed: eng.traineddata AND eng.traineddata.gz (both must exist)
-  // Setup: copy tessdata/eng.traineddata to node_modules/tesseract.js/lang-data/
-  //        and also rename/copy as eng.traineddata.gz in the same folder.
-  const tesseractPkg = path.dirname(require.resolve('tesseract.js/package.json'))
-  const langDataDir  = path.join(tesseractPkg, 'lang-data')
-  const gzPath       = path.join(langDataDir, 'eng.traineddata.gz')
-  const plainPath    = path.join(langDataDir, 'eng.traineddata')
-
-  if (!fs.existsSync(gzPath) || !fs.existsSync(plainPath)) {
-    throw new Error(
-      'Tesseract language data not found.\n' +
-      'Please ensure both files exist in node_modules/tesseract.js/lang-data/:\n' +
-      '  - eng.traineddata\n' +
-      '  - eng.traineddata.gz\n' +
-      'Copy them from the tessdata/ folder at the project root.'
-    )
-  }
-
-  const workerPath = path.join(tesseractPkg, 'src', 'worker-script', 'node', 'index.js')
-
-  const worker = await Tesseract.createWorker('eng', 1, {
-    logger:      () => {},
-    workerPath,
-    langPath:    langDataDir,
-    cacheMethod: 'none',
-  })
-
-  await worker.setParameters({
-    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
-    tessedit_char_whitelist: '',
-  })
-
-  const { data: { text } } = await worker.recognize(imageBuffer)
-  await worker.terminate()
-  return text
-}
-
-/**
- * Crop the top-left corner of the image to extract the station name.
- * In all SC terminals, the station name appears in a box in the top-left
- * of the left panel (YOUR INVENTORIES / CHOOSE DESTINATION area).
- *
- * @param {Buffer} inputBuffer - Raw image bytes
- * @returns {Promise<Buffer>} Processed PNG of just the station name area
- */
-async function cropStationName(inputBuffer) {
-  loadDeps()
-  const meta = await sharp(inputBuffer).metadata()
-  const { width, height } = meta
-
-  // Top-left 40% width, top 25% height — covers the station name box
-  const cropWidth  = Math.floor(width * 0.40)
-  const cropHeight = Math.floor(height * 0.25)
-
-  return sharp(inputBuffer)
-    .extract({ left: 0, top: 0, width: cropWidth, height: cropHeight })
-    .resize({ width: cropWidth * 2 })
-    .greyscale()
-    .normalize()
-    .threshold(130)
-    .sharpen({ sigma: 0.8 })
-    .png()
-    .toBuffer()
-}
-
-/**
- * Full pipeline: raw image buffer → extracted text + station name.
- *
- * @param {Buffer} rawBuffer - Raw jpg/png bytes from disk
- * @returns {Promise<{ text: string, stationName: string|null, processedImageBase64: string }>}
- */
-async function extractText(rawBuffer) {
-  loadDeps()
-
-  // Run both crops in parallel
-  const [processedBuffer, stationBuffer] = await Promise.all([
-    preprocessImage(rawBuffer),
-    cropStationName(rawBuffer),
-  ])
-
-  // Run OCR on both crops in parallel
-  const [text, stationRaw] = await Promise.all([
-    runTesseract(processedBuffer),
-    runTesseract(stationBuffer),
-  ])
-
-  // Parse the station name from the top-left OCR text
-  const stationName = parseStationName(stationRaw)
-
-  console.log('[OCR] Station name raw:', stationRaw.substring(0, 150))
-  console.log('[OCR] Station name parsed:', stationName)
-
-  // Return the processed right-panel image so the UI can show what Tesseract saw
-  const processedImageBase64 = processedBuffer.toString('base64')
-
-  return { text: text.trim(), stationName, processedImageBase64 }
-}
-
-/**
- * Extract the station/location name from the top-left OCR text.
- * Looks for lines that match known SC location name patterns.
- *
- * Examples:
- *   "HUR-L2 FAITHFUL DREAM STATION"
- *   "CRU-L4 SHALLOW FIELDS STATION"
- *   "RUIN STATION"
- *   "AREA18"
- *   "ORISON"
- */
-function parseStationName(rawText) {
-  if (!rawText) return null
-
-  const lines = rawText
-    .split('\n')
-    .map(l => l.trim().toUpperCase())
-    .filter(l => l.length > 3)
-
-  // Priority 1: lines matching SC location code pattern (e.g. HUR-L2, CRU-L4, ARC-L1)
-  const codePattern = /^[A-Z]{2,4}-[A-Z]?\d+\s+[A-Z\s]{4,}/
-  for (const line of lines) {
-    if (codePattern.test(line)) return line.trim()
-  }
-
-  // Priority 2: lines ending with STATION, OUTPOST, TERMINAL, DEPOT
-  const suffixes = ['STATION', 'OUTPOST', 'TERMINAL', 'DEPOT', 'PLATFORM', 'SETTLEMENT', 'COLONY']
-  for (const line of lines) {
-    if (suffixes.some(s => line.endsWith(s)) && line.length > 6) return line.trim()
-  }
-
-  // Priority 3: known short names
-  const knownNames = ['AREA18', 'ORISON', 'LORVILLE', 'MICROTECH', 'NEW BABBAGE', 'RUIN STATION', 'JUMPTOWN']
-  for (const line of lines) {
-    if (knownNames.some(n => line.includes(n))) return line.trim()
-  }
-
-  // Priority 4: longest reasonable line (likely to be the station name)
-  const candidates = lines.filter(l => l.length >= 6 && l.length <= 50 && /^[A-Z0-9\s\-']+$/.test(l))
-  if (candidates.length > 0) {
-    return candidates.sort((a, b) => b.length - a.length)[0].trim()
-  }
-
-  return null
-}
-
-/**
- * Detect the terminal type from the raw OCR text.
- * Returns: 'commodity' | 'item' | 'vehicle_buy' | 'vehicle_rent' | 'unknown'
- */
-function detectTerminalType(text) {
-  const upper = text.toUpperCase()
-
-  console.log('[OCR] detectTerminalType scanning text length:', text.length)
-
-  // Commodities: header says COMMODITIES, uses SCU units
-  if (upper.includes('COMMODIT')) return 'commodity'
-
-  // Items: shop name OR category shown OR QUICK BUY button
-  const itemSignals = [
-    'QUICK BUY', 'ITEM NAME', 'PLATINUM BAY', "DUMPER'S DEPOT", 'DUMPERS DEPOT',
-    'ARMOR', 'SYSTEMS', 'WEAPONS', 'VHCL', 'SUBCATEGOR', 'CHOOSE CATEGORY',
-    'BLUE INFINITY',
+function getScriptPath() {
+  // In packaged app → dist/main/scripts/windows-ocr.ps1
+  // In dev          → src/main/scripts/windows-ocr.ps1  (same relative position)
+  const candidates = [
+    path.join(__dirname, '../scripts/windows-ocr.ps1'),   // dev + built
+    path.join(__dirname, 'scripts/windows-ocr.ps1'),       // fallback
   ]
-  if (itemSignals.some(s => upper.includes(s))) return 'item'
-
-  // Vehicle: rent or buy terminals
-  if (upper.includes('VEHICLE') || upper.includes('RENT')) {
-    return upper.includes('RENT') ? 'vehicle_rent' : 'vehicle_buy'
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c
   }
-
-  // Fallback: if we see SCU it's probably commodity
-  if (upper.includes('SCU')) return 'commodity'
-
-  // If we see price patterns (¤ + numbers) it's probably items
-  if (/[¤¤]\s*[\d,]+/.test(text)) return 'item'
-
-  return 'unknown'
+  return candidates[0] // will fail gracefully later
 }
 
-/**
- * Parse commodity lines from OCR text.
- * Expected line format (from the SHOP INVENTORY panel):
- *   "MEDICAL SUPPLIES   268 SCU"
- *   "LOW INVENTORY  ¤5.4140003K/SCU"   ← price line
+function getTesseractPath() {
+  if (cachedTesseractPath) return cachedTesseractPath;
+
+  const winPath = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe';
+  cachedTesseractPath = (process.platform === 'win32' && fs.existsSync(winPath)) 
+    ? winPath 
+    : 'tesseract'; // En Linux/macOS, debe estar en PATH
+    
+  return cachedTesseractPath;
+}
+
+function getTessdataPath() {
+  if (cachedTessdataPath) return cachedTessdataPath;
+
+  if (app.isPackaged) {
+    cachedTessdataPath = path.join(process.resourcesPath, 'tessdata');
+    return cachedTessdataPath;
+  }
+
+  const candidates = [
+    path.join(__dirname, '../../../tessdata'),
+    path.join(app.getAppPath(), 'tessdata'),
+    path.join(__dirname, '../../tessdata'),
+  ];
+
+  for (const c of candidates) {
+    if (fs.existsSync(path.join(c, 'eng.traineddata'))) {
+      cachedTessdataPath = c;
+      return cachedTessdataPath;
+    }
+  }
+
+  cachedTessdataPath = candidates[0];
+  return cachedTessdataPath;
+}
+
+// ── Windows OCR ──────────────────────────────────────────────────────────────
+
+/** Runs Windows.Media.OCR on an image buffer via PowerShell.
  *
- * Returns array of:
- * { name, price, scu, status, operation }
- */
-function parseCommodityLines(text) {
-  const lines   = text.split('\n').map(l => l.trim()).filter(Boolean)
-  const results = []
+ * @param {Buffer} imageBuffer  - PNG/JPEG image data
+ * @param {string} [lang]       - BCP-47 language tag (default: 'en-US')
+ * @returns {Promise<{text: string, lines: Array, source: 'windows'}>}
+ * @throws if PowerShell fails or language pack is missing */
+async function runWindowsOCR(imageBuffer, lang = 'en-US') {
+  const scriptPath = getScriptPath()
 
-  // Status keywords → numeric codes expected by UEX API
-  const STATUS_MAP = {
-    'OUT OF STOCK':       1,
-    'VERY LOW':           2,
-    'LOW INVENTORY':      3,
-    'MEDIUM':             4,
-    'HIGH INVENTORY':     5,
-    'VERY HIGH':          6,
-    'MAX INVENTORY':      7,
-    'MAXIMUM':            7,
+  if (!fs.existsSync(scriptPath)) {
+    throw new Error(`[WindowsOCR] PS1 script not found at: ${scriptPath}`)
   }
 
-  // Price pattern: ¤ or a or similar prefix, then digits with optional K/M suffix
-  // e.g. "¤5.4140003K/SCU"  "¤1.92200005K/SCU"  "¤151.6660003K/SCU"
-  const pricePattern = /[¤a]?\s*([\d,]+(?:\.\d+)?)\s*([KMB])?\s*\/\s*SCU/i
+  // Write buffer to a temp PNG (WinRT needs a real file path)
+  const tmpPath = path.join(os.tmpdir(), `wocr-${Date.now()}-${Math.random().toString(36).slice(2)}.png`)
+  await fs.promises.writeFile(tmpPath, imageBuffer)
 
-  // SCU pattern: digits followed by SCU
-  const scuPattern = /(\d[\d,]*)\s+SCU\b/i
+  try {
+    const stdout = await new Promise((resolve, reject) => {
+      execFile(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy', 'Bypass',
+          '-File', scriptPath,
+          tmpPath,
+          lang,
+        ],
+        {
+          maxBuffer: 20 * 1024 * 1024,  // 20 MB — generous for large results
+          timeout: 20_000,             // 20s max
+          windowsHide: true,
+        },
+        (err, stdout, stderr) => {
+          if (err) {
+            console.error('[WindowsOCR] Full Error Object:', err);
+            console.error('[WindowsOCR] PowerShell stderr:', stderr); // ESTO TE DARÁ LA CLAVE
+            return reject(err);
+          }
+          resolve(stdout);
+        }
+      )
+    })
 
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
+    // 1. Limpiamos caracteres de control (rango 00-1F y 7F) antes de parsear
+    const sanitizedOutput = stdout.replace(/[\x00-\x1F\x7F]/g, "").trim();
 
-    // Skip header lines, tab labels, UI chrome
-    if (/^(BUY|SELL|LOCAL MARKET VALUE|SHOP INVENTORY|YOUR INVENTORIES|IN DEMAND|NO DEMAND|CANNOT SELL|SELLABLE CARGO|AVAILABLE CARGO SIZE|SELECT SUB-CATEGORY)/i.test(line)) {
-      i++; continue
+    const trimmed = sanitizedOutput.trim()
+    if (!trimmed) throw new Error('[WindowsOCR] Empty response from PowerShell')
+
+    const parsed = JSON.parse(trimmed)
+    if (parsed.error) throw new Error(`[WindowsOCR] ${parsed.error}`)
+
+    // Build a flat text string (same contract as Tesseract output)
+    const text = (parsed.lines || []).map(l => l.text).join('\n')
+    const lineCount = parsed.lines?.length ?? 0
+
+    console.log(`[WindowsOCR] ✅ ${lineCount} lines, angle: ${parsed.angle?.toFixed(2) ?? '?'}°`)
+
+    return {
+      text,
+      lines: parsed.lines || [],
+      angle: parsed.angle ?? 0,
+      source: 'windows',
     }
 
-    // Try to detect a commodity name + SCU on the same line
-    // e.g. "MEDICAL SUPPLIES   268 SCU"
-    const scuMatch = line.match(scuPattern)
-    if (scuMatch) {
-      const name = line.replace(scuMatch[0], '').trim()
-        .replace(/[^a-zA-Z0-9\s\-']/g, '').trim()
-
-      if (name.length < 2) { i++; continue }
-
-      const scu    = parseInt(scuMatch[1].replace(',', ''), 10)
-      let price    = null
-      let status   = null
-      let operation = 'sell' // default assumption; parser will refine
-
-      // Look at next 1-2 lines for status and price
-      for (let j = 1; j <= 3 && i + j < lines.length; j++) {
-        const next = lines[i + j].toUpperCase()
-
-        // Status detection
-        for (const [key, val] of Object.entries(STATUS_MAP)) {
-          if (next.includes(key)) { status = val; break }
-        }
-
-        // Price detection
-        const pm = lines[i + j].match(pricePattern)
-        if (pm) {
-          let raw = parseFloat(pm[1].replace(',', ''))
-          const suffix = (pm[2] || '').toUpperCase()
-          if (suffix === 'K') raw *= 1_000
-          if (suffix === 'M') raw *= 1_000_000
-          if (suffix === 'B') raw *= 1_000_000_000
-          price = Math.round(raw)
-        }
-      }
-
-      // Determine buy/sell from active tab context or SCU=0 heuristic
-      // SCU=0 with price usually means "selling TO player" (buy for player = terminal sells)
-      // We'll mark ambiguous ones and let the user confirm in the UI
-      const isMissing = scu === 0 && status === 1
-
-      results.push({
-        rawName:   name,
-        name:      name,       // will be replaced by fuzzy match
-        id:        null,       // filled by fuzzy match in renderer
-        price,
-        scu,
-        status,
-        operation, // 'buy' | 'sell' — UI lets user confirm
-        is_missing: isMissing ? 1 : 0,
-        _confidence: 'medium',
-      })
-
-      i++; continue
-    }
-
-    i++
+  } finally {
+    // Always clean up the temp file
+    fs.promises.unlink(tmpPath).catch(() => { })
   }
-
-  return results
 }
 
-/**
- * Parse item lines from OCR text.
- * Expected: item name on one line, price (¤ + number) on next or same line.
- * e.g.
- *   "FOXFIRE"
- *   "Volume: 84000 µSCU"
- *   "¤ 44,885"
+// ── Tesseract fallback ───────────────────────────────────────────────────────
+
+/** Tesseract CLI fallback — used on Linux/macOS or when Windows OCR fails. *
+ * @param {Buffer} imageBuffer
+ * @param {string} tesseractPath - Path to tesseract binary
+ * @param {string} tessdataPath  - Path to tessdata directory
+ * @param {number} [psm]         - Page Segmentation Mode (default: 6)
+ * @returns {Promise<{text: string, lines: null, source: 'tesseract'}>}  */
+async function runTesseractOCR(imageBuffer, tesseractPath, tessdataPath, psm = 6) {
+  const tmpPath = path.join(os.tmpdir(), `tess-${Date.now()}-${Math.random().toString(36).slice(2)}.png`)
+  await fs.promises.writeFile(tmpPath, imageBuffer)
+
+  try {
+    const text = await new Promise((resolve, reject) => {
+      const start = Date.now()
+      execFile(
+        tesseractPath,
+        [tmpPath, 'stdout', '-l', 'eng', '--psm', String(psm), '--tessdata-dir', tessdataPath],
+        { maxBuffer: 10 * 1024 * 1024, timeout: 30_000 },
+        (err, stdout) => {
+          const ms = Date.now() - start
+          if (err) {
+            console.error(`[Tesseract] Error (${ms}ms):`, err.message)
+            return reject(err)
+          }
+          console.log(`[Tesseract] ✅ Done (PSM ${psm}, ${ms}ms, ${stdout.length} chars)`)
+          resolve(stdout)
+        }
+      )
+    })
+
+    return { text, lines: null, source: 'tesseract' }
+  } finally {
+    fs.promises.unlink(tmpPath).catch(() => { })
+  }
+}
+
+// ── Unified entry point ──────────────────────────────────────────────────────
+
+/** Runs OCR on an image buffer.
+ * - Windows: tries Windows.Media.OCR first, falls back to Tesseract on failure.
+ * - Linux / macOS: always uses Tesseract.
  *
- * Returns array of: { name, price, operation }
- */
-function parseItemLines(text) {
-  const lines   = text.split('\n').map(l => l.trim()).filter(Boolean)
-  const results = []
+ * @param {Buffer} imageBuffer
+ * @param {object} opts
+ * @param {string}  opts.tesseractPath - Tesseract binary path
+ * @param {string}  opts.tessdataPath  - tessdata directory
+ * @param {number}  [opts.psm]         - Tesseract PSM (default: 6)
+ * @param {string}  [opts.lang]        - Windows OCR language (default: 'en-US')
+ * @param {boolean} [opts.forceWindows]- Skip Windows OCR even on Windows (for testing)
+ * @returns {Promise<{text: string, lines: Array|null, source: 'windows'|'tesseract'}>} */
+async function runOCR(imageBuffer, opts = {}) {
+  const {
+    tesseractPath,
+    tessdataPath,
+    psm = 6,
+    lang = 'en-US',
+    forceWindows = false,
+  } = opts
 
-  // Price: ¤ or a followed by optional space and digits (possibly with commas)
-  const pricePattern = /^[¤a]\s*([\d,]+(?:\.\d+)?)$/
+  const isWindows = process.platform === 'win32'
 
-  // Skip lines that are clearly UI chrome
-  const UI_NOISE = /^(BUY|SELL|QUICK BUY|CHOOSE CATEGORY|CHOOSE SUBCATEGORY|CHOOSE DESTINATION|CHOOSE SUB-DESTINATION|SEARCH|ITEM NAME|ALL CATEGORIES|ALL OPTIONS|VOLUME:|FIRST|PREV|NEXT|LAST|\d+\/\d+)/i
-
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-
-    if (UI_NOISE.test(line) || line.length < 2) { i++; continue }
-
-    // Check if this looks like an item name (no digits, reasonable length)
-    const looksLikeName = /^[A-Z0-9][A-Za-z0-9\s\-'().]+$/.test(line) &&
-                          line.length >= 3 &&
-                          line.length <= 60 &&
-                          !/µSCU|SCU|aUEC|UEC/i.test(line)
-
-    if (looksLikeName) {
-      // Look forward for price
-      let price = null
-      for (let j = 1; j <= 4 && i + j < lines.length; j++) {
-        const next = lines[i + j]
-        const pm   = next.match(pricePattern)
-        if (pm) {
-          price = parseInt(pm[1].replace(/,/g, ''), 10)
-          break
-        }
-      }
-
-      if (price !== null) {
-        results.push({
-          rawName:     line,
-          name:        line,
-          id:          null,
-          id_category: null,
-          price,
-          operation:   'buy',    // items terminals are mostly buy; UI lets user change
-          _confidence: 'medium',
-        })
-      }
+  if (isWindows || forceWindows) {
+    try {
+      const result = await runWindowsOCR(imageBuffer, lang)
+      if (result.lines?.length > 0) return result
+      console.warn('[OCR] Windows OCR returned 0 lines — falling back to Tesseract')
+    } catch (e) {
+      console.warn(`[OCR] Windows OCR failed (${e.message}) — falling back to Tesseract`)
     }
-
-    i++
   }
 
-  return results
+  // Tesseract path is required on non-Windows
+  if (!tesseractPath || !tessdataPath) {
+    throw new Error('[OCR] Tesseract path not provided and Windows OCR unavailable')
+  }
+
+  return runTesseractOCR(imageBuffer, tesseractPath, tessdataPath, psm)
 }
 
-module.exports = {
-  extractText,
-  detectTerminalType,
-  parseCommodityLines,
-  parseItemLines,
+/**  Unified OCR runner. Drop-in replacement for runTesseract().
+ * @param {Buffer} imageBuffer - Image data (PNG preferred)
+ * @param {number} [psm]       - Tesseract PSM mode
+ * @returns {Promise<string>}  - Raw OCR text  */
+async function runOCRPass(imageBuffer, psm = 6) {
+  const result = await runOCR(imageBuffer, {
+    tesseractPath: getTesseractPath(),
+    tessdataPath: getTessdataPath(),
+    psm,
+    lang: 'en-US', // O el idioma que necesites
+  });
+  return result.text;
 }
+
+/** Como runOCRPass pero devuelve el resultado completo {text, lines, source}
+ * Necesario cuando el caller quiere usar las coordenadas X/Y de Windows OCR.
+ * @param {Buffer} imageBuffer
+ * @param {number} [psm]
+ * @returns {Promise<{text: string, lines: Array|null, source: 'windows'|'tesseract'}>}
+ */
+async function runOCRFull(imageBuffer, psm = 6) {
+  return runOCR(imageBuffer, {
+    tesseractPath: getTesseractPath(),
+    tessdataPath: getTessdataPath(),
+    psm,
+    lang: 'en-US',
+  });
+}
+
+async function runTesseractPass(imageBuffer, psm = 6) {
+  return runTesseractOCR(imageBuffer, getTesseractPath(), getTessdataPath(), psm)
+}
+
+module.exports = { runOCRPass, runOCRFull, runTesseractPass }

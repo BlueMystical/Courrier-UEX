@@ -38,6 +38,10 @@
               <i class="pi pi-heart"></i>
               Donate
             </span>
+            <span class="detail-item link-item" @click="openSupport" style="cursor:pointer;">
+              <i class="pi pi-discord"></i>
+              Support
+            </span>
           </div>
 
         </template>
@@ -59,6 +63,10 @@
             <span class="detail-item link-item" @click="openDonate" style="cursor:pointer;">
               <i class="pi pi-heart"></i>
               Donate
+            </span>
+            <span class="detail-item link-item" @click="openSupport" style="cursor:pointer;">
+              <i class="pi pi-discord"></i>
+              Support
             </span>
           </div>
         </template>
@@ -105,6 +113,11 @@
     </div>
 
     <LoginDialog v-model:visible="showLoginDialog" @login="handleLogin" />
+
+    <!-- UEX Badge -->
+    <a href="#" @click.prevent="openUEX" class="uex-badge-link" v-tooltip.left="'Powered by UEX Corp'">
+      <img :src="uexBadgeSrc" alt="Powered by UEX" class="uex-badge-img" />
+    </a>
   </div>
 </template>
 
@@ -127,6 +140,12 @@ const logoSrc = computed(() => {
   return store.colorMode === 'dark'
     ? new URL('@/assets/SC-Courrier-UEX_Logo_01.png', import.meta.url).href
     : new URL('@/assets/SC-Courrier-UEX_Logo_02.png', import.meta.url).href;
+});
+
+const uexBadgeSrc = computed(() => {
+  return store.colorMode === 'dark'
+    ? new URL('@/assets/uex-api-badge-powered.png', import.meta.url).href
+    : new URL('@/assets/uex-api-badge-powered-clear.png', import.meta.url).href;
 });
 
 // Auto-show login if session expired due to update
@@ -170,6 +189,18 @@ async function openPrivacy() {
   const resourcesPath = await window.api.Paths.getResourcesPath()
   const normalizedPath = resourcesPath.replace(/\\/g, '/')
   await window.api.System.openUrlInBrowser(`file:///${normalizedPath}/privacy.html`)
+}
+
+async function openSupport() {
+  await window.api.System.openUrlInBrowser('https://discord.gg/Bz6UkBDPMp')
+}
+
+async function openDonate() {
+  await window.api.System.openUrlInBrowser('https://buymeacoffee.com/blue.mystic')
+}
+
+async function openUEX() {
+  await window.api.System.openUrlInBrowser('https://uexcorp.space/')
 }
 
 onMounted(() => {
@@ -346,10 +377,9 @@ onUnmounted(() => {
 }
 
 .panel-item-chevron {
-  margin-left: auto;
   font-size: 0.75rem;
-  color: var(--p-text-muted-color);
-  transition: transform 0.2s;
+  margin-left: auto;
+  opacity: 0.5;
 }
 
 .panel-item-label {
@@ -367,7 +397,7 @@ onUnmounted(() => {
   opacity: 0.7;
 }
 
-/* ── Logo (sin cambios) ─────────────────────────────── */
+/* ── Logo  ─────────────────────────────── */
 .logo-section {
   margin-bottom: 2rem;
 }
@@ -513,5 +543,25 @@ onUnmounted(() => {
     width: 140px;
     height: 140px;
   }
+}
+
+/* ── UEX Badge ───────────────────────────────────────── */
+.uex-badge-link {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+  z-index: 100;
+  display: block;
+}
+.uex-badge-link:hover {
+  opacity: 1;
+  transform: translateY(-2px);
+}
+.uex-badge-img {
+  height: 50px;
+  width: auto;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 </style>

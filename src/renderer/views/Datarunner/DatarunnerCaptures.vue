@@ -7,26 +7,30 @@
       <InputGroup class="custom-input-group">
         <InputGroupAddon class="watcher-addon"><span class="status-dot"></span></InputGroupAddon>
         <InputText :value="watcherStatusText" readonly class="watcher-text" />
+        <Select v-model="selectedGameVersion" :options="gameVersions" optionLabel="label" optionValue="value"
+          size="small" class="game-version-select" v-tooltip.bottom="'Game Version'" />
         <Button icon="pi pi-send" label="Submit All" class="watcher-btn-submit"
-          :disabled="!captures.some(c => c.status === 'ready' || c.status === 'submit-error')"
-          @click="submitAll" />
-        <Button icon="pi pi-plus-circle" label="Manual Entry" @click="addManualCapture" class="watcher-btn-manual" />
-        <Button icon="pi pi-folder-open" label="Screenshots" class="watcher-btn" @click="openScreenshotsFolder" />
+          :disabled="!captures.some(c => c.status === 'ready' || c.status === 'submit-error')" @click="submitAll"
+          v-tooltip.bottom="'Upload All Captures to UEX'" />
+        <Button icon="pi pi-plus-circle" @click="addManualCapture" class="watcher-btn-manual"
+          v-tooltip.bottom="'Manual Entry'" />
+        <Button icon="pi pi-folder-open" class="watcher-btn" @click="openScreenshotsFolder"
+          v-tooltip.bottom="'Open Screenshots Folder'" />
       </InputGroup>
     </div>
 
     <!-- ZONA 2: scrolleable -->
     <div class="captures-scroll" ref="scrollContainer">
 
-      <div v-for="(capture, cIndex) in captures" :key="capture.id" class="capture-block"
-        :id="'capture-' + capture.id"
+      <div v-for="(capture, cIndex) in captures" :key="capture.id" class="capture-block" :id="'capture-' + capture.id"
         :class="{ 'new-capture-anim': capture.isNew, 'capture-sent': capture.status === 'sent' }"
         @click="capture.status === 'sent' && toggleSentExpand(capture.id)">
 
         <!-- SENT: compact read-only header -->
         <div v-if="capture.status === 'sent'" class="capture-header capture-header--sent">
           <i class="pi pi-check-circle" style="color:#00ffcc; font-size:14px; flex-shrink:0;" />
-          <span class="sent-terminal">{{ terminalOptions.find(t => t.value === capture.terminalId)?.label ?? '—' }}</span>
+          <span class="sent-terminal">{{terminalOptions.find(t => t.value === capture.terminalId)?.label ?? '—'
+            }}</span>
           <span class="sent-meta">{{ capture.type }} · {{ capture.mode }}</span>
           <span class="sent-items">{{ capture.items.length }} item{{ capture.items.length !== 1 ? 's' : '' }}</span>
           <div class="status-badge status-sent" style="margin-left:auto;">
@@ -42,7 +46,8 @@
           <div style="min-width: 220px;">
             <span class="label">Terminal:</span>
             <Select v-model="capture.terminalId" :options="terminalOptions" filter autoFilterFocus optionLabel="label"
-              optionValue="value" placeholder="Select" size="small" class="w-full" :class="getHeaderClass(capture.terminalId)" />
+              optionValue="value" placeholder="Select" size="small" class="w-full"
+              :class="getHeaderClass(capture.terminalId)" />
           </div>
           <div style="min-width: 150px;">
             <span class="label">Type:</span>
@@ -52,7 +57,7 @@
           <div style="min-width: 120px;">
             <span class="label">Mode:</span>
             <Select v-model="capture.mode" :options="modeOptions" optionLabel="label" optionValue="value" size="small"
-              class="w-full" :class="getHeaderClass(capture.mode)"/>
+              class="w-full" :class="getHeaderClass(capture.mode)" />
           </div>
           <div class="status-badge" :class="`status-${capture.status}`">
             <i v-if="capture.status === 'processing'" class="pi pi-spin pi-spinner" style="font-size: 11px;" />
@@ -63,11 +68,11 @@
 
         <div class="capture-body" v-show="capture.status !== 'sent' || expandedSent.has(capture.id)">
 
-          <div class="preview-area" @dragover="onDragOver" @drop="capture.status !== 'sent' && onDropImage(capture, $event)">
+          <div class="preview-area" @dragover="onDragOver"
+            @drop="capture.status !== 'sent' && onDropImage(capture, $event)">
             <img v-if="capture.previewBase64" :src="capture.previewBase64"
               title="Click to enlarge · CTRL+Click to Open Externally" class="preview-img"
-              @click.exact="openLightbox(capture.previewBase64)"
-              @click.ctrl.prevent="openImageExternal(capture)"
+              @click.exact="openLightbox(capture.previewBase64)" @click.ctrl.prevent="openImageExternal(capture)"
               @dblclick.prevent.stop="capture.status !== 'sent' && pickImageForCapture(capture)" />
             <div v-else class="no-image-placeholder" title="Click to load an image"
               @click="capture.status !== 'sent' && pickImageForCapture(capture)">
@@ -94,7 +99,7 @@
                   <!-- id_category comes directly from the resolved item object -->
                   <Select :id="'cat-' + cIndex + '-' + iIndex" v-model="item.id_category" :options="itemCategories"
                     optionLabel="name" optionValue="id" filter autoFilterFocus size="small"
-                    @change="fetchItemsByCategory(item.id_category)" :class="getHeaderClass(item.id_category)"/>
+                    @change="fetchItemsByCategory(item.id_category)" :class="getHeaderClass(item.id_category)" />
                   <label :for="'cat-' + cIndex + '-' + iIndex">Category</label>
                 </FloatLabel>
               </template>
@@ -102,8 +107,9 @@
               <FloatLabel class="item-field item-field--name">
                 <!-- item.id is the catalogue id — used for dropdown binding, price hints, and submit -->
                 <Select :id="'item-' + cIndex + '-' + iIndex" v-model="item.id"
-                  :options="getOptionsForCapture(capture, item)" optionLabel="name" optionValue="id" filter autoFilterFocus size="small"
-                  @change="fetchPriceHint(capture.type, item.id)" :class="getHeaderClass(item.id)" />
+                  :options="getOptionsForCapture(capture, item)" optionLabel="name" optionValue="id" filter
+                  autoFilterFocus size="small" @change="fetchPriceHint(capture.type, item.id)"
+                  :class="getHeaderClass(item.id)" />
                 <label :for="'item-' + cIndex + '-' + iIndex">Item Name</label>
               </FloatLabel>
 
@@ -132,14 +138,13 @@
 
               <!-- ITEM -->
               <template v-if="capture.type === 'item'">
-                <FloatLabel class="item-field item-field--small" :class="capture.status !== 'sent' ? getPriceClass(capture, item) : null">
-                  <InputText v-model="item.price" size="small"
-                    v-tooltip.top="{
-                      value: buildTooltipText(capture.type, capture.mode, getPriceHint(capture.type, item.id)),
-                      showDelay: 200,
-                      pt: { text: { style: 'white-space:pre-line;min-width:100px;font-size:12px;line-height:1.8;background:#111821;border:1px solid #1e2a35;color:#e6e6e6;padding:8px 12px;' } }
-                    }"
-                    @focus="fetchPriceHint(capture.type, item.id)" />
+                <FloatLabel class="item-field item-field--small"
+                  :class="capture.status !== 'sent' ? getPriceClass(capture, item) : null">
+                  <InputText v-model="item.price" size="small" v-tooltip.top="{
+                    value: buildTooltipText(capture.type, capture.mode, getPriceHint(capture.type, item.id)),
+                    showDelay: 200,
+                    pt: { text: { style: 'white-space:pre-line;min-width:100px;font-size:12px;line-height:1.8;background:#111821;border:1px solid #1e2a35;color:#e6e6e6;padding:8px 12px;' } }
+                  }" @focus="fetchPriceHint(capture.type, item.id)" />
                   <label>Price/item</label>
                 </FloatLabel>
               </template>
@@ -147,14 +152,11 @@
               <!-- VEHICLE -->
               <template v-if="capture.type?.startsWith('vehicle')">
                 <FloatLabel class="item-field item-field--small">
-                  <InputNumber v-model="item.price" :min="0" size="small" fluid
-                    v-tooltip.top="{
-                      value: buildTooltipText(capture.type, capture.mode, getPriceHint(capture.type, item.id)),
-                      showDelay: 200,
-                      pt: { text: { style: 'white-space:pre-line;min-width:100px;font-size:12px;line-height:1.8;background:#111821;border:1px solid #1e2a35;color:#e6e6e6;padding:8px 12px;' } }
-                    }"
-                    @focus="fetchPriceHint(capture.type, item.id)"
-                    :class="getPriceClass(capture, item)" />
+                  <InputNumber v-model="item.price" :min="0" size="small" fluid v-tooltip.top="{
+                    value: buildTooltipText(capture.type, capture.mode, getPriceHint(capture.type, item.id)),
+                    showDelay: 200,
+                    pt: { text: { style: 'white-space:pre-line;min-width:100px;font-size:12px;line-height:1.8;background:#111821;border:1px solid #1e2a35;color:#e6e6e6;padding:8px 12px;' } }
+                  }" @focus="fetchPriceHint(capture.type, item.id)" :class="getPriceClass(capture, item)" />
                   <label>Price</label>
                 </FloatLabel>
               </template>
@@ -178,7 +180,7 @@
     <Teleport to="body">
       <div v-if="lightboxSrc" class="lightbox-overlay" @click="closeLightbox">
         <div class="lightbox-stage" :style="lightboxCursor" @click.stop @wheel.prevent="onWheelZoom"
-            @mousedown="startPan" @mousemove="onPan" @mouseup="endPan" @mouseleave="endPan">
+          @mousedown="startPan" @mousemove="onPan" @mouseup="endPan" @mouseleave="endPan">
           <img :src="lightboxSrc" class="lightbox-img" :style="lightboxStyle" draggable="false" />
         </div>
         <button class="lightbox-close" @click="closeLightbox">✕</button>
@@ -199,9 +201,10 @@ import InputNumber from 'primevue/inputnumber'
 import Button from 'primevue/button'
 import FloatLabel from 'primevue/floatlabel'
 import Tooltip from 'primevue/tooltip'
+import { controls } from '@primeuix/themes/aura/orderlist'
 
 const vTooltip = Tooltip
-const notify   = useNotify()
+const notify = useNotify()
 const scrollContainer = ref(null)
 
 // ── Sent captures expand/collapse ─────────────────────────────────────────────
@@ -213,23 +216,25 @@ function toggleSentExpand(id) {
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const terminals        = ref([])
-const commoditiesList  = ref([])
-const vehiclesList     = ref([])
-const itemCategories   = ref([])
-const itemsByCategory  = ref({})
-const captures         = ref([])
-const stockStatuses    = ref({ buy: [], sell: [] })
+const terminals = ref([])
+const commoditiesList = ref([])
+const vehiclesList = ref([])
+const itemCategories = ref([])
+const itemsByCategory = ref({})
+const captures = ref([])
+const stockStatuses = ref({ buy: [], sell: [] })
 const watcherStatusText = ref('Watcher Active, waiting for screenshots...')
-const priceCache       = ref({})
+const priceCache = ref({})
+const gameVersions = ref([])
+const selectedGameVersion = ref(null)
 
 const typeOptions = [
   { label: 'Commodities', value: 'commodity' },
-  { label: 'Items',       value: 'item' },
-  { label: 'Vehicles',    value: 'vehicle' }
+  { label: 'Items', value: 'item' },
+  { label: 'Vehicles', value: 'vehicle' }
 ]
 const modeOptions = [
-  { label: 'Buy',  value: 'buy' },
+  { label: 'Buy', value: 'buy' },
   { label: 'Sell', value: 'sell' },
   { label: 'Rent', value: 'rent' }
 ]
@@ -238,17 +243,20 @@ const terminalOptions = computed(() =>
   terminals.value.map(t => ({ label: t.name, value: t.id }))
 )
 
+let ocrStatus = null;
+
 // ── URLs ──────────────────────────────────────────────────────────────────────
-const SCREENSHOTS_FOLDER     = 'C:\\Program Files\\Roberts Space Industries\\StarCitizen\\LIVE\\screenshots'
-const BASE                   = 'https://api.uexcorp.uk/2.0'
-const API_COMMODITIES        = `${BASE}/commodities`
+const SCREENSHOTS_FOLDER = 'C:\\Program Files\\Roberts Space Industries\\StarCitizen\\LIVE\\screenshots'
+const BASE = 'https://api.uexcorp.uk/2.0'
+const API_COMMODITIES = `${BASE}/commodities`
 const API_COMMODITIES_PRICES = `${BASE}/commodities_prices?id_commodity=`
-const API_STOCK_STATUSES     = `${BASE}/commodities_status`
-const API_VEHICLES           = `${BASE}/vehicles`
-const API_VEHICLES_PRICES    = `${BASE}/vehicles_purchases_prices?id_vehicle=`
-const API_ITEMS              = `${BASE}/items?id_category=`
-const API_ITEMS_PRICES       = `${BASE}/items_prices?id_item=`
-const API_ITEM_CATEGORIES    = `${BASE}/categories?type=item`
+const API_STOCK_STATUSES = `${BASE}/commodities_status`
+const API_VEHICLES = `${BASE}/vehicles`
+const API_VEHICLES_PRICES = `${BASE}/vehicles_purchases_prices?id_vehicle=`
+const API_ITEMS = `${BASE}/items?id_category=`
+const API_ITEMS_PRICES = `${BASE}/items_prices?id_item=`
+const API_ITEM_CATEGORIES = `${BASE}/categories?type=item`
+const API_GAME_VERSIONS = `${BASE}/game_versions`
 
 // ── API Fetchers ──────────────────────────────────────────────────────────────
 
@@ -258,7 +266,7 @@ const fetchCommodities = async () => {
     const json = await res.json()
     if (json.status === 'ok') {
       commoditiesList.value = json.data
-      window.api.invoke('uex:cacheCommodities', json).catch(() => {})
+      window.api.invoke('uex:cacheCommodities', json).catch(() => { })
     }
   } catch (e) { console.error('Error Commodities', e) }
 }
@@ -287,6 +295,20 @@ const fetchStockStatuses = async () => {
   } catch (e) { console.error('Error stock statuses', e) }
 }
 
+const fetchGameVersions = async () => {
+  try {
+    const res = await fetch(API_GAME_VERSIONS)
+    const json = await res.json()
+    if (json.status === 'ok' && json.data) {
+      gameVersions.value = [
+        { label: `LIVE: ${json.data.live}`, value: json.data.live },
+        { label: `PTU: ${json.data.ptu}`, value: json.data.ptu }
+      ]
+      selectedGameVersion.value = json.data.live // Por defecto seleccionamos LIVE
+    }
+  } catch (e) { console.error('Error fetching game versions', e) }
+}
+
 const fetchItemsByCategory = async (categoryId) => {
   if (!categoryId || itemsByCategory.value[categoryId]) return
   try {
@@ -304,24 +326,24 @@ async function fetchPriceHint(type, id) {
   if (priceCache.value[key] !== undefined) return
   const urls = {
     commodity: `${API_COMMODITIES_PRICES}${id}`,
-    item:      `${API_ITEMS_PRICES}${id}`,
-    vehicle:   `${API_VEHICLES_PRICES}${id}`
+    item: `${API_ITEMS_PRICES}${id}`,
+    vehicle: `${API_VEHICLES_PRICES}${id}`
   }
   const url = urls[type]
   if (!url) return
   priceCache.value[key] = null
   try {
-    const res  = await fetch(url)
+    const res = await fetch(url)
     const json = await res.json()
     if (json.status !== 'ok' || !json.data?.length) return
     const data = json.data
-    const avg  = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null
+    const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null
     if (type === 'commodity') {
-      const buy  = data.map(r => r.price_buy_avg).filter(p => p > 0)
+      const buy = data.map(r => r.price_buy_avg).filter(p => p > 0)
       const sell = data.map(r => r.price_sell_avg).filter(p => p > 0)
       priceCache.value[key] = {
         buy: avg(buy), sell: avg(sell),
-        buyMin: buy.length  ? Math.min(...buy)  : null, buyMax: buy.length  ? Math.max(...buy)  : null,
+        buyMin: buy.length ? Math.min(...buy) : null, buyMax: buy.length ? Math.max(...buy) : null,
         sellMin: sell.length ? Math.min(...sell) : null, sellMax: sell.length ? Math.max(...sell) : null,
         sources: data.length
       }
@@ -359,7 +381,7 @@ function buildTooltipText(type, mode, hint) {
   if (!hint) return '📊 No market data available'
   const lines = []
   if (type === 'commodity') {
-    if (mode === 'buy'  || !mode) lines.push(`Buy avg   : ${fmtPrice(hint.buy)}`)
+    if (mode === 'buy' || !mode) lines.push(`Buy avg   : ${fmtPrice(hint.buy)}`)
     if (mode === 'sell' || !mode) lines.push(`Sell avg  : ${fmtPrice(hint.sell)}`)
   }
   if (type === 'item' || type === 'vehicle') lines.push(`Buy avg   : ${fmtPrice(hint.buy)}`)
@@ -375,15 +397,15 @@ function getHeaderClass(value) {
 function getPriceState(capture, item) {
   if (item.price === null || item.price === undefined || item.price === '') return 'missing'
   const price = Number(item.price)
-  const avg   = getAverageForItem(capture, item)
+  const avg = getAverageForItem(capture, item)
   if (!avg || avg <= 0 || isNaN(price)) return null
   const diff = Math.abs(price - avg) / avg
-  if (diff >= 1)   return 'extreme'
+  if (diff >= 1) return 'extreme'
   if (diff >= 0.5) return 'warning'
   return null
 }
 
-function getPriceClass(capture, item)    { const s = getPriceState(capture, item);    return s ? `price-${s}` : null }
+function getPriceClass(capture, item) { const s = getPriceState(capture, item); return s ? `price-${s}` : null }
 
 function getQuantityClass(capture, item) {
   const qty = item.quantity
@@ -395,7 +417,7 @@ function getQuantityClass(capture, item) {
 function getStatusClass(capture, item) {
   const code = item.stockStatus, qty = item.quantity
   if (code === null || code === undefined || code === '') return 'price-missing'
-  if (code === 1 && qty > 0)   return 'price-extreme'
+  if (code === 1 && qty > 0) return 'price-extreme'
   if (code !== 1 && qty === 0) return 'price-warning'
   return null
 }
@@ -414,15 +436,15 @@ function onStockChange(capture, item) {
 const getOptionsForCapture = (capture, item) => {
   if (!item) return []
   if (capture.type === 'commodity') return commoditiesList.value
-  if (capture.type === 'vehicle')   return vehiclesList.value
+  if (capture.type === 'vehicle') return vehiclesList.value
   // item.id_category comes directly from the resolved catalogue object
-  if (capture.type === 'item')      return itemsByCategory.value[item.id_category] || []
+  if (capture.type === 'item') return itemsByCategory.value[item.id_category] || []
   return []
 }
 
 const handleTypeChange = (capture) => {
   if (capture.type === 'commodity' && !commoditiesList.value.length) fetchCommodities()
-  if (capture.type === 'vehicle'   && !vehiclesList.value.length)    fetchVehicles()
+  if (capture.type === 'vehicle' && !vehiclesList.value.length) fetchVehicles()
 }
 
 function updateCapture(id, fields) {
@@ -433,14 +455,14 @@ function updateCapture(id, fields) {
 
 function newItemTemplate() {
   return {
-    id:          null,   // catalogue item id — drives dropdown, price hints, submit
+    id: null,   // catalogue item id — drives dropdown, price hints, submit
     id_category: null,   // for category dropdown
-    name:        '',     // display name
-    quantity:    null,
-    price:       null,
+    name: '',     // display name
+    quantity: null,
+    price: null,
     stockStatus: null,
     containerSizes: '',
-    size:        ''
+    size: ''
   }
 }
 
@@ -480,7 +502,7 @@ async function openImageExternal(capture) {
   }
 }
 function removeCaptureBlock(index) { captures.value.splice(index, 1) }
-function removeItem(cap, idx)      { cap.items.splice(idx, 1) }
+function removeItem(cap, idx) { cap.items.splice(idx, 1) }
 
 // ── OCR item mapper ───────────────────────────────────────────────────────────
 //
@@ -510,9 +532,9 @@ function mapOcrItems(ocrItems, type) {
         // Spread full API object (id, id_category, name, slug, section, category, size, etc.)
         ...ocrItem,
         // Ensure these UI-facing fields are set
-        id_category:    categoryId,
-        stockStatus:    null,
-        quantity:       null,
+        id_category: categoryId,
+        stockStatus: null,
+        quantity: null,
         containerSizes: '',
         // ocr_name kept for debug, price already set from ocrService
       }
@@ -523,15 +545,23 @@ function mapOcrItems(ocrItems, type) {
         ?? commoditiesList.value.find(c => c.name?.toLowerCase() === ocrItem.name?.toLowerCase())?.id
         ?? null
       if (id) fetchPriceHint('commodity', id)
+
+      // OCR devuelve status como objeto {code, name, short, abbr} en ocrItem.status
+      const statusCode = ocrItem.status?.code ?? ocrItem.stockStatus?.code ?? ocrItem.stockStatus ?? null
+
+      // Regla: si está out of stock (code 1), la cantidad siempre es 0
+      let quantity = ocrItem.quantity ?? null
+      if (statusCode === 1) quantity = 0
+
       return {
         id,
-        id_category:    null,
-        name:           ocrItem.name ?? '',
-        quantity:       ocrItem.quantity   ?? null,
-        price:          ocrItem.price      ?? null,
-        stockStatus:    ocrItem.stockStatus?.code ?? null,
+        id_category: null,
+        name: ocrItem.name ?? '',
+        quantity,
+        price: ocrItem.price ?? null,
+        stockStatus: statusCode,
         containerSizes: ocrItem.containerSizes ?? '',
-        size:           ocrItem.size ?? ''
+        size: ocrItem.size ?? ''
       }
     }
 
@@ -542,13 +572,13 @@ function mapOcrItems(ocrItems, type) {
       if (id) fetchPriceHint('vehicle', id)
       return {
         id,
-        id_category:    null,
-        name:           ocrItem.name ?? '',
-        quantity:       null,
-        price:          ocrItem.price ?? null,
-        stockStatus:    null,
+        id_category: null,
+        name: ocrItem.name ?? '',
+        quantity: null,
+        price: ocrItem.price ?? null,
+        stockStatus: null,
         containerSizes: '',
-        size:           ''
+        size: ''
       }
     }
 
@@ -560,14 +590,20 @@ function mapOcrItems(ocrItems, type) {
 async function processOCROnCapture(id, base64, mimeType) {
   updateCapture(id, { status: 'processing' })
   try {
-    const result = await window.api.OCR.process({ base64, mimeType })
+    // 👇 Añadimos ocrMethod basándonos en tu variable de estado global
+    const result = await window.api.OCR.process({ 
+      base64, 
+      mimeType, 
+      ocrMethod: ocrStatus.method //<- 'win-ocr' o 'tesseract'
+    })
+    
     console.log('[OCR] Result:', result)
     if (!result?.success) { updateCapture(id, { status: 'ocr-error' }); return }
 
     const type = result.type === 'unknown' ? 'commodity' : (result.type ?? null)
     const mode = result.mode ?? null
     if (type === 'commodity' && !commoditiesList.value.length) await fetchCommodities()
-    if (type === 'vehicle'   && !vehiclesList.value.length)    await fetchVehicles()
+    if (type === 'vehicle' && !vehiclesList.value.length) await fetchVehicles()
 
     const mappedItems = mapOcrItems(result.items, type)
     updateCapture(id, { terminalId: result.terminal?.id ?? null, type, mode, items: mappedItems, status: 'ready' })
@@ -583,8 +619,8 @@ function onDropImage(capture, event) {
   if (!file || !file.type.startsWith('image/')) return
   const reader = new FileReader()
   reader.onload = async (e) => {
-    const dataUrl  = e.target.result
-    const base64   = dataUrl.split(',')[1]
+    const dataUrl = e.target.result
+    const base64 = dataUrl.split(',')[1]
     const mimeType = file.type
     updateCapture(capture.id, { previewBase64: dataUrl, fullBase64: base64, filename: file.name, status: 'ready' })
     await processOCROnCapture(capture.id, base64, mimeType)
@@ -618,27 +654,39 @@ async function processScreenshot(data) {
 
 function buildPrices(capture) {
   if (!capture.items?.length) return []
-  if (capture.type === 'commodity') {
-    return capture.items.map(item => ({
-      id_commodity: item.id,
-      price_sell:   item.price,
-      scu_sell:     item.quantity,
-      scu_status:   item.stockStatus
-    }))
-  }
-  if (capture.type === 'item') {
-    return capture.items.map(item => ({
-      id_item:   item.id,
-      price_buy: item.price
-    }))
-  }
-  if (capture.type === 'vehicle') {
-    return capture.items.map(item => ({
-      id_vehicle: item.id,
-      price_rent: item.price
-    }))
-  }
-  return []
+  const { type, mode } = capture
+
+  return capture.items.map(item => {
+    if (type === 'commodity') {
+      const priceKey = mode === 'buy' ? 'price_buy' : 'price_sell'
+      const scuKey = mode === 'buy' ? 'scu_buy' : 'scu_sell'
+      const statusKey = mode === 'buy' ? 'status_buy' : 'status_sell'
+      return {
+        id_commodity: item.id,
+        [priceKey]: item.price,
+        [scuKey]: item.quantity,
+        [statusKey]: item.stockStatus
+      }
+    }
+
+    if (type === 'item') {
+      const priceKey = mode === 'buy' ? 'price_buy' : 'price_sell'
+      return {
+        id_item: item.id,
+        [priceKey]: item.price
+      }
+    }
+
+    if (type === 'vehicle') {
+      const priceKey = mode === 'buy' ? 'price_buy' : 'price_rent'
+      return {
+        id_vehicle: item.id,
+        [priceKey]: item.price
+      }
+    }
+
+    return {}
+  })
 }
 
 async function submitAll() {
@@ -646,19 +694,28 @@ async function submitAll() {
   if (!pending.length) return
 
   let successCount = 0
-  let errorCount   = 0
+  let errorCount = 0
 
   for (const capture of pending) {
     try {
-      const payload = {
-        id_terminal:   capture.terminalId,
-        type:          capture.type,
-        mode:          capture.mode,
-        is_production: 0,
-        prices:        buildPrices(capture),
-        screenshot:    capture.fullBase64
+      // Mapeo del tipo para vehículos
+      let finalType = capture.type
+      if (capture.type === 'vehicle') {
+        finalType = `vehicle_${capture.mode}`
       }
+
+      const payload = {
+        id_terminal: capture.terminalId,
+        type: finalType,
+        is_production: 0, // 0=DESA, 1=PROD
+        prices: buildPrices(capture),
+        game_version: selectedGameVersion.value, // Versión actual de SC
+        screenshot: capture.fullBase64
+      }
+
+      console.log('[Submit] Payload:', payload);
       const result = await window.api.invoke('uex:submitData', payload)
+      console.log('[Submit] Response:', result);
 
       if (result?.success) {
         successCount++
@@ -666,12 +723,12 @@ async function submitAll() {
       } else {
         errorCount++
         updateCapture(capture.id, { status: 'submit-error' })
-        const apiResp   = result?.apiResponse
-        const errName   = apiResp?.status ?? result?.error ?? 'Submit failed'
+        const apiResp = result?.apiResponse
+        const errName = apiResp?.status ?? result?.error ?? 'Submit failed'
         const errDetail = [
-          apiResp?.message   ? `Message: ${apiResp.message}`         : null,
-          apiResp?.data      ? `Data: ${JSON.stringify(apiResp.data)}` : null,
-          apiResp?.http_code ? `HTTP ${apiResp.http_code}`            : null
+          apiResp?.message ? `Message: ${apiResp.message}` : null,
+          apiResp?.data ? `Data: ${JSON.stringify(apiResp.data)}` : null,
+          apiResp?.http_code ? `HTTP ${apiResp.http_code}` : null
         ].filter(Boolean).join('\n') || result?.error
         notify.errorNotification(errName, errDetail)
       }
@@ -714,9 +771,9 @@ function onPan(event) {
   if (!isPanning.value) return
   translate.value = { x: event.clientX - start.value.x, y: event.clientY - start.value.y }
 }
-function endPan()        { isPanning.value = false }
+function endPan() { isPanning.value = false }
 function openLightbox(src) { lightboxSrc.value = src; scale.value = 1; translate.value = { x: 0, y: 0 } }
-function closeLightbox()   { lightboxSrc.value = null }
+function closeLightbox() { lightboxSrc.value = null }
 
 async function pickImageForCapture(capture) {
   const result = await window.api.System.showOpenDialog({
@@ -725,15 +782,71 @@ async function pickImageForCapture(capture) {
   })
   if (!result || !result.length) return
   const filePath = result[0]
-  const base64   = await window.api.invoke('file:readAsBase64', filePath)
+  const base64 = await window.api.invoke('file:readAsBase64', filePath)
   if (!base64) return
-  const ext      = filePath.split('.').pop().toLowerCase()
+  const ext = filePath.split('.').pop().toLowerCase()
   const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg'
   updateCapture(capture.id, {
     previewBase64: `data:${mimeType};base64,${base64}`,
     fullBase64: base64, filename: filePath.split(/[\\/]/).pop(), status: 'ready'
   })
   await processOCROnCapture(capture.id, base64, mimeType)
+}
+
+
+// Check the state of Windows OCR:
+async function checkOcrStatus() {
+  ocrStatus = await window.api.invoke('file:isWindowsOcrInstalled', 'en-US');
+  console.log('[OCR Status]', ocrStatus);
+
+  if (ocrStatus && ocrStatus.method === 'win-ocr') {
+    console.log('✅ Windows OCR Ready.');
+    return;
+  }
+
+  if (ocrStatus.reason === 'WIN_OCR_MISSING') {
+    console.log('❌ Windows OCR missing. Falling back to Tesseract.');
+    return;
+  }
+
+  if (ocrStatus.reason === 'OCR_LANG_MISSING') {
+    // 1. Prepare native dialog options
+    const dialogOptions = {
+      type: 'question',
+      buttons: ['Install', 'Cancel'], // Index 0: Install, Index 1: Cancel
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Missing OCR Language',
+      message: 'The English language pack for Windows OCR is not installed.',
+      detail: 'Installing this will significantly improve scan speeds for Star Citizen terminal screens. Do you want to install it now? (Requires Administrator privileges).'
+    };
+
+    // 2. Show the dialog and wait for user interaction
+    const userResponse = await window.api.invoke('dialog:showMessageBox', dialogOptions);
+
+    // 3. Process response (response.response contains the clicked button index)
+    if (userResponse.response === 0) {
+      console.log('⏳ Starting OCR language installation...');
+      try {
+        const installResult = await window.api.invoke('file:installWindowsOcr', 'en-US');
+        console.log(installResult)
+
+        // Verificación final "handshake"
+        const finalStatus = await window.api.invoke('file:isWindowsOcrInstalled', 'en-US');
+        console.log(finalStatus)
+
+        notify.success('Installation finished. An App restart might be needed.')
+
+        if (finalStatus && finalStatus.method === 'win-ocr') {
+          console.log('✅ Installation verified and OCR is ready!');          
+        } else {
+          console.warn('⚠️ Installation finished but OCR is still not detected. A restart might be needed.');
+        }
+      } catch (error) {
+        console.error('❌ Installation failed or was cancelled:', error);
+      }
+    }
+  }
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -743,20 +856,13 @@ onMounted(async () => {
     terminals.value = res?.terminals?.data || []
   } catch (e) { terminals.value = [] }
 
-  await Promise.all([fetchStockStatuses(), fetchCommodities(), fetchCategories(), fetchVehicles()])
+  await Promise.all([fetchStockStatuses(), fetchCommodities(), fetchCategories(), fetchVehicles(), fetchGameVersions(), checkOcrStatus()])
 
   window.api.Screenshots.offNew()
   window.api.Screenshots.offFolderMissing()
-
-  window.api.Screenshots.onWatcherStarted((data) => {
-    watcherStatusText.value = `Watcher Active — ${data?.path ?? ''}`
-  })
-  window.api.Screenshots.onFolderMissing(() => {
-    watcherStatusText.value = '⚠️ Screenshots folder not found — configure in Settings'
-  })
-  window.api.Screenshots.onNew(async (data) => {
-    await processScreenshot(data)
-  })
+  window.api.Screenshots.onWatcherStarted((data) => { watcherStatusText.value = `Watcher Active — ${data?.path ?? ''}`})
+  window.api.Screenshots.onFolderMissing(() => { watcherStatusText.value = '⚠️ Screenshots folder not found — configure in Settings' })
+  window.api.Screenshots.onNew(async (data) => { await processScreenshot(data)  })
 })
 
 onUnmounted(() => {
@@ -766,106 +872,445 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.dr-container { background: #0b0f14; color: #e6e6e6; font-family: sans-serif; height: calc(100vh - 60px); display: flex; flex-direction: column; overflow: hidden; }
-.captures-scroll { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
-.watcher-bar { padding: 12px 20px; flex-shrink: 0; border-bottom: 1px solid #1e2a35; }
+.dr-container {
+  background: #0b0f14;
+  color: #e6e6e6;
+  font-family: sans-serif;
+  height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
-:deep(.custom-input-group) { border: 1px solid #1e2a35; border-radius: 4px; overflow: hidden; }
-:deep(.watcher-addon)      { background: #111821; border: none; border-right: 1px solid #1e2a35; padding: 0 1rem; }
-:deep(.p-inputtext.watcher-text) { background: #0b0f14; color: #00ffcc; border: none; font-weight: normal; box-shadow: none; }
-:deep(.watcher-btn)        { background: #1a2530; color: #e6e6e6; border: none; border-left: 1px solid #1e2a35; }
-:deep(.watcher-btn-manual) { background: #003a3a; color: #00ffcc; border: none; border-left: 1px solid #1e2a35; }
-:deep(.watcher-btn-submit) { background: #003a3a; color: #00ffcc; border: none; border-left: 1px solid #1e2a35; }
-:deep(.watcher-btn-submit:disabled) { opacity: 0.35; cursor: not-allowed; }
+.captures-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.watcher-bar {
+  padding: 12px 20px;
+  flex-shrink: 0;
+  border-bottom: 1px solid #1e2a35;
+}
+
+:deep(.custom-input-group) {
+  border: 1px solid #1e2a35;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+:deep(.watcher-addon) {
+  background: #111821;
+  border: none;
+  border-right: 1px solid #1e2a35;
+  padding: 0 1rem;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #00ffcc;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 8px #00ffcc;
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(0, 255, 204, 0.7);
+  }
+
+  70% {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 10px rgba(0, 255, 204, 0);
+  }
+
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(0, 255, 204, 0);
+  }
+}
+
+:deep(.p-inputtext.watcher-text) {
+  background: #0b0f14;
+  color: #00ffcc;
+  border: none;
+  font-weight: normal;
+  box-shadow: none;
+}
+
+:deep(.watcher-btn) {
+  background: #1a2530;
+  color: #e6e6e6;
+  border: none;
+  border-left: 1px solid #1e2a35;
+}
+
+:deep(.watcher-btn-manual) {
+  background: #003a3a;
+  color: #00ffcc;
+  border: none;
+  border-left: 1px solid #1e2a35;
+}
+
+:deep(.watcher-btn-submit) {
+  background: #003a3a;
+  color: #00ffcc;
+  border: none;
+  border-left: 1px solid #1e2a35;
+}
+
+:deep(.watcher-btn-submit:disabled) {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 :deep(.watcher-btn-manual .p-button-label),
 :deep(.watcher-btn .p-button-label),
-:deep(.watcher-btn-submit .p-button-label) { font-weight: normal; }
+:deep(.watcher-btn-submit .p-button-label) {
+  font-weight: normal;
+}
+
+:deep(.game-version-select) {
+  background: #111821 !important;
+  border: none !important;
+  border-left: 1px solid #1e2a35 !important;
+  border-right: 1px solid #1e2a35 !important;
+  color: #00ffcc !important;
+  min-width: 120px;
+  max-width: 130px;
+}
 
 /* ── Price Alert States ───────────────────────────── */
-:deep(.price-missing .p-inputtext) { border: 2px solid #ff4d4f !important; background-color: #2a1215 !important; }
-:deep(.price-warning .p-inputtext) { border: 2px solid #4096ff !important; background-color: #111c2f !important; }
-:deep(.price-extreme .p-inputtext) { border: 2px solid #fadb14 !important; background-color: #2b2611 !important; }
-:deep(.p-select.price-missing)     { border: 2px solid #ff4d4f !important; background-color: #2a1215 !important; }
-:deep(.p-select.price-warning)     { border: 2px solid #4096ff !important; background-color: #111c2f !important; }
-:deep(.p-select.price-extreme)     { border: 2px solid #fadb14 !important; background-color: #2b2611 !important; }
+:deep(.price-missing .p-inputtext) {
+  border: 2px solid #ff4d4f !important;
+  background-color: #2a1215 !important;
+}
 
-.new-capture-anim { animation: flash-highlight 2s ease-out; }
+:deep(.price-warning .p-inputtext) {
+  border: 2px solid #4096ff !important;
+  background-color: #111c2f !important;
+}
+
+:deep(.price-extreme .p-inputtext) {
+  border: 2px solid #fadb14 !important;
+  background-color: #2b2611 !important;
+}
+
+:deep(.p-select.price-missing) {
+  border: 2px solid #ff4d4f !important;
+  background-color: #2a1215 !important;
+}
+
+:deep(.p-select.price-warning) {
+  border: 2px solid #4096ff !important;
+  background-color: #111c2f !important;
+}
+
+:deep(.p-select.price-extreme) {
+  border: 2px solid #fadb14 !important;
+  background-color: #2b2611 !important;
+}
+
+.new-capture-anim {
+  animation: flash-highlight 2s ease-out;
+}
+
 @keyframes flash-highlight {
-  0% { border-color: #00ffcc; background: rgba(0, 255, 204, 0.15); box-shadow: 0 0 15px rgba(0, 255, 204, 0.3); }
-  50% { border-color: #00ffcc; background: rgba(0, 255, 204, 0.05); }
-  100% { border-color: #1e2a35; background: #111821; }
+  0% {
+    border-color: #00ffcc;
+    background: rgba(0, 255, 204, 0.15);
+    box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
+  }
+
+  50% {
+    border-color: #00ffcc;
+    background: rgba(0, 255, 204, 0.05);
+  }
+
+  100% {
+    border-color: #1e2a35;
+    background: #111821;
+  }
 }
 
-.capture-block { border: 1px solid #1e2a35; background: #111821; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
-.capture-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.capture-body { display: grid; grid-template-columns: 260px 1fr; gap: 20px; border-top: 1px solid #1e2a35; padding-top: 25px; }
+.capture-block {
+  border: 1px solid #1e2a35;
+  background: #111821;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
 
-.label { color: #00ffcc; font-size: 12px; text-transform: uppercase; margin-right: 10px; }
+.capture-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.capture-body {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 20px;
+  border-top: 1px solid #1e2a35;
+  padding-top: 25px;
+}
+
+.label {
+  color: #00ffcc;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin-right: 10px;
+}
+
 .status-badge {
-  padding: 2px 10px; border-radius: 4px; font-size: 11px; font-weight: bold;
-  text-transform: uppercase; letter-spacing: 0.5px;
-  display: flex; align-items: center; gap: 5px; white-space: nowrap;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
 }
-.status-processing { background: #1a2a1a; color: #88ffaa; border: 1px solid #336644; }
-.status-ready      { background: #1a2a3a; color: #00ffcc; border: 1px solid #005577; }
-.status-error        { background: #2a1a1a; color: #ff6666; border: 1px solid #662222; }
-.status-ocr-error    { background: #2a1a1a; color: #ff6666; border: 1px solid #662222; }
-.status-submit-error { background: #2a1a1a; color: #ff9966; border: 1px solid #883322; }
-.status-sent         { background: #1a1a2a; color: #aaaaff; border: 1px solid #334488; }
 
-.ocr-overlay { display: flex; align-items: center; gap: 8px; color: #88ffaa; font-size: 13px; padding: 8px 0; }
-.ocr-error   { display: flex; align-items: center; gap: 8px; color: #ff6666; font-size: 13px; padding: 8px 0; }
+.status-processing {
+  background: #1a2a1a;
+  color: #88ffaa;
+  border: 1px solid #336644;
+}
 
-.items-area { display: flex; flex-direction: column; gap: 28px; }
-.item-row   { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid #1e2a35; }
+.status-ready {
+  background: #1a2a3a;
+  color: #00ffcc;
+  border: 1px solid #005577;
+}
 
-.item-field         { display: flex; flex-direction: column; min-width: 120px; }
-.item-field--name   { flex: 1; min-width: 180px; }
-.item-field--status { min-width: 130px; max-width: 160px; }
-.item-field--small  { min-width: 70px; max-width: 90px; }
+.status-error {
+  background: #2a1a1a;
+  color: #ff6666;
+  border: 1px solid #662222;
+}
 
-.item-delete-btn { flex-shrink: 0; align-self: flex-end; margin-bottom: 2px; width: 2rem !important; height: 2rem !important; }
-.add-item-container { padding-top: 4px; }
+.status-ocr-error {
+  background: #2a1a1a;
+  color: #ff6666;
+  border: 1px solid #662222;
+}
 
-:deep(.p-floatlabel label)                               { color: #00ffcc; font-size: 13px; }
+.status-submit-error {
+  background: #2a1a1a;
+  color: #ff9966;
+  border: 1px solid #883322;
+}
+
+.status-sent {
+  background: #1a1a2a;
+  color: #aaaaff;
+  border: 1px solid #334488;
+}
+
+.ocr-overlay {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #88ffaa;
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.ocr-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ff6666;
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.items-area {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.item-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #1e2a35;
+}
+
+.item-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+}
+
+.item-field--name {
+  flex: 1;
+  min-width: 180px;
+}
+
+.item-field--status {
+  min-width: 130px;
+  max-width: 160px;
+}
+
+.item-field--small {
+  min-width: 70px;
+  max-width: 90px;
+}
+
+.item-delete-btn {
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-bottom: 2px;
+  width: 2rem !important;
+  height: 2rem !important;
+}
+
+.add-item-container {
+  padding-top: 4px;
+}
+
+:deep(.p-floatlabel label) {
+  color: #00ffcc;
+  font-size: 13px;
+}
+
 :deep(.p-floatlabel:has(.p-inputwrapper-focus) label),
-:deep(.p-floatlabel:has(.p-inputwrapper-filled) label)   { color: #00ffcc !important; }
-:deep(.p-inputtext), :deep(.p-select)                    { background: #0f141b !important; border: 1px solid #1e2a35 !important; color: white !important; }
+:deep(.p-floatlabel:has(.p-inputwrapper-filled) label) {
+  color: #00ffcc !important;
+}
+
+:deep(.p-inputtext),
+:deep(.p-select) {
+  background: #0f141b !important;
+  border: 1px solid #1e2a35 !important;
+  color: white !important;
+}
+
 :deep(.p-tooltip .p-tooltip-text) {
-  white-space: pre-line; font-size: 12px; line-height: 1.8; min-width: 100px; max-width: 100px;
-  background: #111821; border: 1px solid #1e2a35; color: #e6e6e6; padding: 8px 12px;
+  white-space: pre-line;
+  font-size: 12px;
+  line-height: 1.8;
+  min-width: 100px;
+  max-width: 100px;
+  background: #111821;
+  border: 1px solid #1e2a35;
+  color: #e6e6e6;
+  padding: 8px 12px;
 }
 
-.preview-img { width: 100%; border: 1px solid #1e2a35; border-radius: 4px; cursor: zoom-in; transition: border-color 0.2s; }
-.preview-img:hover { border-color: #00ffcc; }
-.preview-area { border: 2px dashed transparent; border-radius: 4px; transition: border-color 0.2s; }
-.preview-area:hover { border-color: #1e2a35; }
+.preview-img {
+  width: 100%;
+  border: 1px solid #1e2a35;
+  border-radius: 4px;
+  cursor: zoom-in;
+  transition: border-color 0.2s;
+}
+
+.preview-img:hover {
+  border-color: #00ffcc;
+}
+
+.preview-area {
+  border: 2px dashed transparent;
+  border-radius: 4px;
+  transition: border-color 0.2s;
+}
+
+.preview-area:hover {
+  border-color: #1e2a35;
+}
+
 .no-image-placeholder {
-  height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: #080b0f; border: 1px dashed #1e2a35; color: #444; gap: 8px; cursor: pointer;
-  transition: border-color 0.2s, color 0.2s; border-radius: 4px;
+  height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #080b0f;
+  border: 1px dashed #1e2a35;
+  color: #444;
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+  border-radius: 4px;
 }
-.no-image-placeholder:hover { border-color: #00ffcc; color: #00ffcc; }
 
-.lightbox-overlay  { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.lightbox-stage    { width: 90vw; height: 90vh; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-.lightbox-img      { position: absolute; top: 50%; left: 50%; transform-origin: center center; }
-.lightbox-close    {
-  position: fixed; top: 20px; right: 24px; 
-  background: rgba(15, 20, 27, 0.8); /* Fondo oscuro semitransparente */
+.no-image-placeholder:hover {
+  border-color: #00ffcc;
+  color: #00ffcc;
+}
+
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.lightbox-stage {
+  width: 90vw;
+  height: 90vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+}
+
+.lightbox-close {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  background: rgba(15, 20, 27, 0.8);
+  /* Fondo oscuro semitransparente */
   border: 2px solid var(--p-primary-color);
   color: var(--p-primary-color);
-  font-size: 18px; width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
   transition: all 0.2s ease;
   z-index: 10001;
-  backdrop-filter: blur(4px); /* Efecto de desenfoque de fondo */
+  backdrop-filter: blur(4px);
+  /* Efecto de desenfoque de fondo */
 }
-.lightbox-close:hover { 
-  transform: scale(1.1); 
-  background: var(--p-primary-color); 
-  color: #0b0f14; 
+
+.lightbox-close:hover {
+  transform: scale(1.1);
+  background: var(--p-primary-color);
+  color: #0b0f14;
   box-shadow: 0 0 25px var(--p-primary-color);
 }
 
@@ -875,7 +1320,10 @@ onUnmounted(() => {
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 }
-.capture-sent:hover { border-color: #00ffcc44; }
+
+.capture-sent:hover {
+  border-color: #00ffcc44;
+}
 
 .capture-header--sent {
   display: flex;
@@ -883,9 +1331,22 @@ onUnmounted(() => {
   gap: 12px;
   padding: 2px 0;
 }
-.sent-terminal { color: #e6e6e6; font-size: 13px; font-weight: 500; }
-.sent-meta     { color: #888; font-size: 12px; }
-.sent-items    { color: #555; font-size: 12px; }
+
+.sent-terminal {
+  color: #e6e6e6;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sent-meta {
+  color: #888;
+  font-size: 12px;
+}
+
+.sent-items {
+  color: #555;
+  font-size: 12px;
+}
 
 .items-area--readonly {
   pointer-events: none;

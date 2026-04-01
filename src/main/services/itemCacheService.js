@@ -15,14 +15,20 @@
 'use strict'
 
 const path = require('path')
-const fs   = require('fs')
+const fs = require('fs')
 const { app } = require('electron')
 const uexCache = require('../helpers/uexCache')
 
-const CACHE_KEY_ITEMS      = 'items'
+const CACHE_KEY_ITEMS = 'items'
 const CACHE_KEY_CATEGORIES = 'item_categories'
-const CACHE_KEY_LAST_SYNC  = 'items_last_sync'
-const TTL_MS               = 24 * 60 * 60 * 1000
+const CACHE_KEY_LAST_SYNC = 'items_last_sync'
+const TTL_MS = 24 * 60 * 60 * 1000
+
+const CACHE_KEY_VEHICLES = 'vehicles'
+
+function getVehicleDiskCachePath() {
+  return path.join(app.getPath('userData'), 'vehicles-cache.json')
+}
 
 // Disk cache file — stored alongside settings.json in userData
 function getDiskCachePath() {
@@ -41,6 +47,16 @@ function loadFromDisk() {
     if (!data || !data.savedAt || !Array.isArray(data.items)) {
       console.log('[ItemCache] 💾 Disk cache invalid — ignoring')
       return null
+    }
+    // Nueva lógica para vehículos
+    const vPath = getVehicleDiskCachePath()
+    if (fs.existsSync(vPath)) {
+      const disk = JSON.parse(fs.readFileSync(vPath, 'utf8'))
+      const age = Date.now() - disk.savedAt
+      if (age < TTL_MS) {
+        uexCache.set(CACHE_KEY_VEHICLES, disk.vehicles || [])
+        console.log(`[VehicleCache] 💾 Loaded ${disk.vehicles.length} vehicles from disk`)
+      }
     }
     console.log(`[ItemCache] 💾 Disk cache loaded: ${data.items.length} items, savedAt: ${new Date(data.savedAt).toISOString()}`)
     return data
@@ -61,23 +77,23 @@ function saveToDisk(categories, items) {
   }
 }
 
-let _win       = null
+let _win = null
 let _syncTimer = null
 
 const _state = {
-  state:    'idle',
+  state: 'idle',
   progress: 0,
-  total:    0,
-  done:     0,
-  cached:   0,
+  total: 0,
+  done: 0,
+  cached: 0,
   lastSync: null,
-  error:    null
+  error: null
 }
 
 function emit(event, data) {
   try {
     if (_win && !_win.isDestroyed()) _win.webContents.send(event, data)
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function isCacheFresh() {
@@ -86,18 +102,39 @@ function isCacheFresh() {
   return (Date.now() - lastSync) < TTL_MS
 }
 
+
 // Called by main.js IPC handler when renderer delivers fetched data.
-function receiveSyncData({ categories, items }) {
-  console.log(`[ItemCache] ✅ Received from renderer: ${categories?.length} categories, ${items?.length} items`)
-  uexCache.set(CACHE_KEY_CATEGORIES, categories || [])
-  uexCache.set(CACHE_KEY_ITEMS, items || [])
+function receiveSyncData(data) {
+  const { categories, items, vehicles } = data || {}
+  
+  console.log(`[ItemCache] ✅ Received from renderer: ${categories?.length} categories, ${items?.length} items, ${vehicles?.length} vehicles`)
+  
+  if (categories) uexCache.set(CACHE_KEY_CATEGORIES, categories)
+  if (items) uexCache.set(CACHE_KEY_ITEMS, items)
+  if (vehicles) {
+    console.log(`[VehicleCache] 📥 Receiving ${vehicles.length} vehicles`)
+    uexCache.set(CACHE_KEY_VEHICLES, vehicles)
+    fs.writeFileSync(getVehicleDiskCachePath(), JSON.stringify({
+      vehicles,
+      savedAt: Date.now()
+    }))
+  }
   uexCache.set(CACHE_KEY_LAST_SYNC, Date.now())
   saveToDisk(categories, items)
-  _state.state    = 'done'
-  _state.cached   = items?.length ?? 0
+  _state.state = 'done'
+  _state.cached = items?.length ?? 0
   _state.lastSync = Date.now()
   _state.progress = 100
-  _state.error    = null
+  _state.error = null
+
+  if (data.vehicles) {
+    console.log(`[VehicleCache] 📥 Receiving ${data.vehicles.length} vehicles`)
+    uexCache.set(CACHE_KEY_VEHICLES, data.vehicles)
+    fs.writeFileSync(getVehicleDiskCachePath(), JSON.stringify({
+      vehicles: data.vehicles,
+      savedAt: Date.now()
+    }))
+  }
   emit('items-cache:sync-complete', { total: _state.cached, errors: 0, lastSync: _state.lastSync })
 }
 
@@ -112,9 +149,9 @@ function receiveSyncError(errorMsg) {
 // Tells the renderer to start fetching.
 function requestSync() {
   console.log('[ItemCache] 📡 Requesting renderer to fetch items...')
-  _state.state    = 'syncing'
+  _state.state = 'syncing'
   _state.progress = 0
-  _state.error    = null
+  _state.error = null
   emit('items-cache:request-sync', {})
 }
 
@@ -124,8 +161,8 @@ function startBackgroundSync(win, delayMs = 8000) {
   // 1. Try in-memory cache first (fastest path — same session)
   if (isCacheFresh()) {
     const items = uexCache.get(CACHE_KEY_ITEMS) || []
-    _state.state    = 'done'
-    _state.cached   = items.length
+    _state.state = 'done'
+    _state.cached = items.length
     _state.lastSync = uexCache.get(CACHE_KEY_LAST_SYNC)
     _state.progress = 100
     console.log(`[ItemCache] ✅ In-memory cache fresh (${items.length} items) — skipping sync`)
@@ -139,12 +176,12 @@ function startBackgroundSync(win, delayMs = 8000) {
   // 2. Try loading from disk (persists across app restarts)
   const disk = loadFromDisk()
   if (disk && disk.savedAt && (Date.now() - disk.savedAt) < TTL_MS) {
-    console.log(`[ItemCache] ✅ Disk cache fresh (${disk.items.length} items, age: ${Math.round((Date.now()-disk.savedAt)/60000)}min) — loading into memory`)
+    console.log(`[ItemCache] ✅ Disk cache fresh (${disk.items.length} items, age: ${Math.round((Date.now() - disk.savedAt) / 60000)}min) — loading into memory`)
     uexCache.set(CACHE_KEY_CATEGORIES, disk.categories || [])
     uexCache.set(CACHE_KEY_ITEMS, disk.items || [])
     uexCache.set(CACHE_KEY_LAST_SYNC, disk.savedAt)
-    _state.state    = 'done'
-    _state.cached   = disk.items.length
+    _state.state = 'done'
+    _state.cached = disk.items.length
     _state.lastSync = disk.savedAt
     _state.progress = 100
     setTimeout(() => emit('items-cache:sync-complete', {
@@ -168,13 +205,14 @@ function scheduleAutoRefresh() {
   }, TTL_MS)
 }
 
-function forceSync()     { requestSync() }
-function getItems()      { return uexCache.get(CACHE_KEY_ITEMS)      || [] }
+function forceSync() { requestSync() }
+function getItems() { return uexCache.get(CACHE_KEY_ITEMS) || [] }
 function getCategories() { return uexCache.get(CACHE_KEY_CATEGORIES) || [] }
-function getStatus()     { return { ..._state } }
+function getStatus() { return { ..._state } }
+function getVehicles() { return uexCache.get(CACHE_KEY_VEHICLES) || [] }
 function destroy() {
   if (_syncTimer) { clearInterval(_syncTimer); _syncTimer = null }
   _win = null
 }
 
-module.exports = { startBackgroundSync, receiveSyncData, receiveSyncError, forceSync, getItems, getCategories, getStatus, destroy, isCacheFresh }
+module.exports = { startBackgroundSync, receiveSyncData, receiveSyncError, forceSync, getItems, getCategories, getStatus, getVehicles, destroy, isCacheFresh }

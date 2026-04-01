@@ -22,6 +22,7 @@ const DEFAULT_TTLS = {
   items:           24 * 60 * 60 * 1000,   // 24 hours
   item_categories: 24 * 60 * 60 * 1000,   // 24 hours
   stations:        24 * 60 * 60 * 1000,   // 24 hours
+  vehicles:        48 * 60 * 60 * 1000,   // 48 hours (vehicle data is mostly static, but we want to refresh periodically for new additions/changes)
   items_last_sync: Infinity,               // never expires (timestamp is checked externally)
 }
 

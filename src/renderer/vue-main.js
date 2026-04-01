@@ -146,6 +146,22 @@ async function syncItemsFromRenderer(store) {
   }
 }
 
+async function syncVehiclesFromRenderer() {
+  try {
+    console.log('[UEX] 🔄 Fetching vehicles from API...')
+    const response = await fetch('https://api.uexcorp.uk/2.0/vehicles')
+    const data = await response.json()
+    const vehicles = data.data || []
+    
+    if (vehicles.length > 0) {
+      window.api.invoke('uex:cacheItems', { vehicles })  // Solo envía vehicles
+      console.log(`[UEX] ✅ Vehicles synced successfully (${vehicles.length})`)
+    }
+  } catch (error) {
+    console.error('[UEX] ❌ Error syncing vehicles:', error)
+  }
+}
+
 // #endregion
 
 // #region Main Process
@@ -227,6 +243,7 @@ async function syncItemsFromRenderer(store) {
     app.mount('#app')
 
     syncTerminalsFromRenderer(store)
+    syncVehiclesFromRenderer(store)
 
     // Only sync when main process explicitly requests it (after TTL check)
     window.api.on('items-cache:request-sync', () => {
@@ -238,6 +255,7 @@ async function syncItemsFromRenderer(store) {
         console.log('[Sync] Manual sync requested by user');
         await syncTerminalsFromRenderer(store);
         await syncItemsFromRenderer(store);
+        await syncVehiclesFromRenderer(store);
     });
 
     console.log('  ✓ App mounted successfully')

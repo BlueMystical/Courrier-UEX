@@ -16,7 +16,7 @@ export const useAppStore = defineStore('app', () => {
     const syncMessage = ref(''); // Mensaje de progreso de sincronización
     const lastSync = ref(null); // Fecha de la última sincronización exitosa
     const colorMode = ref('light'); // 'light' o 'dark'
-
+    
     // Acciones:
 
     /** Persiste los datos del usuario logeado */

@@ -77,8 +77,8 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
     })
 
     // Renderer delivers fetched items catalogue → store in cache
-    ipcMain.handle('uex:cacheItems', async (_, { categories, items }) => {
-        itemCacheService.receiveSyncData({ categories, items })
+    ipcMain.handle('uex:cacheItems', async (_, { categories, items, vehicles }) => {
+        itemCacheService.receiveSyncData({ categories, items, vehicles  })
         return true
     })
 

@@ -6,7 +6,7 @@ import NotFound from './views/NotFound.vue'
 
 const routes = [
   { path: '/', component: HomeView, meta: { title: 'Home' } },
-  { path: '/settings', component: SettingsView, meta: { title: 'Settings', hideMenubar: true } }, //<- Muestra en ventana nueva sin menubar
+  { path: '/settings', component: SettingsView, meta: { title: 'Settings', hideMenubar: true } },
   {
     path: '/buysell/comodities', name: 'Commodities',
     component: () => import('./views/BuySell/Commodities.vue'),
@@ -22,6 +22,12 @@ const routes = [
     component: () => import('./views/BuySell/Vehicles.vue'),
     meta: { title: 'Vehicle Market' }
   },
+  {
+    path: '/buysell/routes', name: 'Trade Routes',
+    component: () => import('./views/BuySell/CommoditiesRoutes.vue'),
+    meta: { title: 'Trade Routes' }
+  },
+  // ---------------------------------------
   { path: '/buysell/marketplace', component: () => import('@/views/BuySell/Marketplace.vue') },
   {
     path: '/datarunner-capture',    name: 'DatarunnerCaptures',

@@ -46,88 +46,93 @@
             </div>
         </div>
 
-        <!-- Loading -->
-        <div v-if="loading" class="loading-state">
-            <ProgressSpinner />
-            <p>Loading vehicles...</p>
-        </div>
+        <!-- Scrollable content area (only this part scrolls) -->
+        <ScrollPanel class="content-scroll">
 
-        <!-- Error -->
-        <Message v-else-if="error" severity="error" class="error-msg">{{ error }}</Message>
+            <!-- Loading -->
+            <div v-if="loading" class="loading-state">
+                <ProgressSpinner />
+                <p>Loading vehicles...</p>
+            </div>
 
-        <!-- Vehicle grid -->
-        <div v-else-if="filteredVehicles.length > 0" class="vehicles-grid">
-            <div v-for="vehicle in filteredVehicles" :key="vehicle.id" class="vehicle-card"
-                :class="{ 'selected': selectedVehicle?.id === vehicle.id }" @click="selectVehicle(vehicle)">
-                <!-- Vehicle image -->
-                <div class="vehicle-image-wrapper">
-                    <img :src="vehicle.url_photo" :alt="vehicle.name_full" class="vehicle-image"
-                        @error="onImageError($event)" />
-                    <div class="vehicle-badges">
-                        <Tag v-if="vehicle.is_starter" value="Starter" severity="success" class="badge" />
-                        <Tag v-if="vehicle.is_concept" value="Concept" severity="warn" class="badge" />
-                        <Tag v-if="vehicle.is_military" value="Military" severity="danger" class="badge" />
-                    </div>
-                    <div class="vehicle-pad">{{ vehicle.pad_type }}</div>
-                </div>
+            <!-- Error -->
+            <Message v-else-if="error" severity="error" class="error-msg">{{ error }}</Message>
 
-                <!-- Vehicle info -->
-                <div class="vehicle-info">
-                    <div class="vehicle-header">
-                        <span class="vehicle-manufacturer">{{ vehicle.company_name }}</span>
-                        <span class="vehicle-version">{{ vehicle.game_version }}</span>
-                    </div>
-                    <h3 class="vehicle-name">{{ vehicle.name_full }}</h3>
-
-                    <!-- Specs row -->
-                    <div class="vehicle-specs">
-                        <div class="spec" v-if="vehicle.crew">
-                            <i class="pi pi-users"></i>
-                            <span>{{ vehicle.crew }}</span>
+            <!-- Vehicle grid -->
+            <div v-else-if="filteredVehicles.length > 0" class="vehicles-grid">
+                <div v-for="vehicle in filteredVehicles" :key="vehicle.id" class="vehicle-card"
+                    :class="{ 'selected': selectedVehicle?.id === vehicle.id }" @click="selectVehicle(vehicle)">
+                    <!-- Vehicle image -->
+                    <div class="vehicle-image-wrapper">
+                        <img :src="vehicle.url_photo" :alt="vehicle.name_full" class="vehicle-image"
+                            @error="onImageError($event)" />
+                        <div class="vehicle-badges">
+                            <Tag v-if="vehicle.is_starter" value="Starter" severity="success" class="badge" />
+                            <Tag v-if="vehicle.is_concept" value="Concept" severity="warn" class="badge" />
+                            <Tag v-if="vehicle.is_military" value="Military" severity="danger" class="badge" />
                         </div>
-                        <div class="spec" v-if="vehicle.scu">
-                            <i class="pi pi-box"></i>
-                            <span>{{ vehicle.scu }} SCU</span>
-                        </div>
-                        <div class="spec">
-                            <i class="pi pi-arrows-alt"></i>
-                            <span>{{ vehicle.length }}m</span>
-                        </div>
+                        <div class="vehicle-pad">{{ vehicle.pad_type }}</div>
                     </div>
 
-                    <!-- Role tags -->
-                    <div class="role-tags">
-                        <span v-if="vehicle.is_cargo" class="role-tag">Cargo</span>
-                        <span v-if="vehicle.is_mining" class="role-tag">Mining</span>
-                        <span v-if="vehicle.is_exploration" class="role-tag">Exploration</span>
-                        <span v-if="vehicle.is_medical" class="role-tag">Medical</span>
-                        <span v-if="vehicle.is_salvage" class="role-tag">Salvage</span>
-                        <span v-if="vehicle.is_racing" class="role-tag">Racing</span>
-                        <span v-if="vehicle.is_refuel" class="role-tag">Refuel</span>
-                        <span v-if="vehicle.is_repair" class="role-tag">Repair</span>
-                        <span v-if="vehicle.is_passenger" class="role-tag">Passenger</span>
-                        <span v-if="vehicle.is_ground_vehicle" class="role-tag">Ground</span>
-                    </div>
+                    <!-- Vehicle info -->
+                    <div class="vehicle-info">
+                        <div class="vehicle-header">
+                            <span class="vehicle-manufacturer">{{ vehicle.company_name }}</span>
+                            <span class="vehicle-version">{{ vehicle.game_version }}</span>
+                        </div>
+                        <h3 class="vehicle-name">{{ vehicle.name_full }}</h3>
 
-                    <!-- Price preview -->
-                    <div class="price-preview" v-if="vehicle._priceMin">
-                        <i class="pi pi-tag"></i>
-                        <span>From <strong>{{ formatAUEC(vehicle._priceMin) }}</strong> aUEC</span>
-                    </div>
-                    <div class="price-preview no-price" v-else>
-                        <i class="pi pi-question-circle"></i>
-                        <span>No price data</span>
+                        <!-- Specs row -->
+                        <div class="vehicle-specs">
+                            <div class="spec" v-if="vehicle.crew">
+                                <i class="pi pi-users"></i>
+                                <span>{{ vehicle.crew }}</span>
+                            </div>
+                            <div class="spec" v-if="vehicle.scu">
+                                <i class="pi pi-box"></i>
+                                <span>{{ vehicle.scu }} SCU</span>
+                            </div>
+                            <div class="spec">
+                                <i class="pi pi-arrows-alt"></i>
+                                <span>{{ vehicle.length }}m</span>
+                            </div>
+                        </div>
+
+                        <!-- Role tags -->
+                        <div class="role-tags">
+                            <span v-if="vehicle.is_cargo" class="role-tag">Cargo</span>
+                            <span v-if="vehicle.is_mining" class="role-tag">Mining</span>
+                            <span v-if="vehicle.is_exploration" class="role-tag">Exploration</span>
+                            <span v-if="vehicle.is_medical" class="role-tag">Medical</span>
+                            <span v-if="vehicle.is_salvage" class="role-tag">Salvage</span>
+                            <span v-if="vehicle.is_racing" class="role-tag">Racing</span>
+                            <span v-if="vehicle.is_refuel" class="role-tag">Refuel</span>
+                            <span v-if="vehicle.is_repair" class="role-tag">Repair</span>
+                            <span v-if="vehicle.is_passenger" class="role-tag">Passenger</span>
+                            <span v-if="vehicle.is_ground_vehicle" class="role-tag">Ground</span>
+                        </div>
+
+                        <!-- Price preview -->
+                        <div class="price-preview" v-if="vehicle._priceMin">
+                            <i class="pi pi-tag"></i>
+                            <span>From <strong>{{ formatAUEC(vehicle._priceMin) }}</strong> aUEC</span>
+                        </div>
+                        <div class="price-preview no-price" v-else>
+                            <i class="pi pi-question-circle"></i>
+                            <span>No price data</span>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Empty state -->
-        <div v-else class="empty-state">
-            <i class="pi pi-car"></i>
-            <p>No vehicles found</p>
-            <Button label="Clear filters" icon="pi pi-times" text @click="clearFilters" />
-        </div>
+            <!-- Empty state -->
+            <div v-else class="empty-state">
+                <i class="pi pi-car"></i>
+                <p>No vehicles found</p>
+                <Button label="Clear filters" icon="pi pi-times" text @click="clearFilters" />
+            </div>
+
+        </ScrollPanel>
 
         <!-- Price detail drawer / side panel -->
         <Drawer v-model:visible="showPricePanel" position="right" :style="{ width: '480px' }" :modal="false">
@@ -317,6 +322,7 @@ import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import Drawer from 'primevue/drawer'
 import Divider from 'primevue/divider'
+import ScrollPanel from 'primevue/scrollpanel'
 import { useNotify } from '@/components/Notificaciones/Notify'
 
 const notify = useNotify()
@@ -507,7 +513,10 @@ function formatAUEC(value) {
     gap: 1rem;
     padding: 1.5rem;
     height: 100%;
+    width: 100%;
+    min-width: 0;
     overflow: hidden;
+    box-sizing: border-box;
 }
 
 /* ── HEADER ── */
@@ -517,6 +526,7 @@ function formatAUEC(value) {
     align-items: center;
     gap: 1rem;
     flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .header-title {
@@ -565,6 +575,30 @@ function formatAUEC(value) {
     align-items: center;
     gap: 0.75rem;
     flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+/* ── SCROLLABLE CONTENT AREA ── */
+/* This is the ONLY part of the view that scrolls. `min-height: 0` is the
+   key fix: without it, a flex child ignores its own overflow rules and
+   just expands the parent instead of scrolling internally. */
+.content-scroll {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    min-width: 0;
+}
+
+.content-scroll :deep(.p-scrollpanel-wrapper) {
+    height: 100%;
+    width: 100%;
+}
+
+.content-scroll :deep(.p-scrollpanel-content) {
+    width: 100%;
+    box-sizing: border-box;
+    padding-right: 0.75rem;
+    /* small breathing room so cards don't touch the scrollbar track */
 }
 
 .search-input {
@@ -584,7 +618,7 @@ function formatAUEC(value) {
     align-items: center;
     justify-content: center;
     gap: 1rem;
-    flex: 1;
+    min-height: 300px;
     color: var(--p-text-muted-color);
 }
 
@@ -598,7 +632,7 @@ function formatAUEC(value) {
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    flex: 1;
+    min-height: 300px;
     color: var(--p-text-muted-color);
 }
 
@@ -612,9 +646,8 @@ function formatAUEC(value) {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 1rem;
-    overflow-y: auto;
-    padding-right: 0.25rem;
-    flex: 1;
+    align-content: start;
+    /* scrolling is now handled by the parent ScrollPanel, not this grid */
 }
 
 .vehicle-card {

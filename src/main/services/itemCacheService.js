@@ -48,15 +48,15 @@ function loadFromDisk() {
       console.log('[ItemCache] 💾 Disk cache invalid — ignoring')
       return null
     }
-    // Nueva lógica para vehículos
+    // Vehículos: cargamos siempre lo que haya en disco (fresco o viejo).
+    // Un dato stale es mejor que ningún dato mientras se revalida en background.
     const vPath = getVehicleDiskCachePath()
     if (fs.existsSync(vPath)) {
-      const disk = JSON.parse(fs.readFileSync(vPath, 'utf8'))
-      const age = Date.now() - disk.savedAt
-      if (age < TTL_MS) {
-        uexCache.set(CACHE_KEY_VEHICLES, disk.vehicles || [])
-        console.log(`[VehicleCache] 💾 Loaded ${disk.vehicles.length} vehicles from disk`)
-      }
+      const diskVehicles = JSON.parse(fs.readFileSync(vPath, 'utf8'))
+      const vehicles = diskVehicles.vehicles || []
+      uexCache.set(CACHE_KEY_VEHICLES, vehicles)
+      const ageMin = Math.round((Date.now() - (diskVehicles.savedAt || 0)) / 60000)
+      console.log(`[VehicleCache] 💾 Loaded ${vehicles.length} vehicles from disk (age: ${ageMin}min)`)
     }
     console.log(`[ItemCache] 💾 Disk cache loaded: ${data.items.length} items, savedAt: ${new Date(data.savedAt).toISOString()}`)
     return data
@@ -173,26 +173,46 @@ function startBackgroundSync(win, delayMs = 8000) {
     return
   }
 
-  // 2. Try loading from disk (persists across app restarts)
+  // 2. Try loading from disk (persists across app restarts).
+  //    IMPORTANT: load it into memory regardless of freshness — stale data
+  //    the user can search is far better than an empty cache while we refetch.
   const disk = loadFromDisk()
-  if (disk && disk.savedAt && (Date.now() - disk.savedAt) < TTL_MS) {
-    console.log(`[ItemCache] ✅ Disk cache fresh (${disk.items.length} items, age: ${Math.round((Date.now() - disk.savedAt) / 60000)}min) — loading into memory`)
+  if (disk && Array.isArray(disk.items) && disk.items.length) {
     uexCache.set(CACHE_KEY_CATEGORIES, disk.categories || [])
     uexCache.set(CACHE_KEY_ITEMS, disk.items || [])
     uexCache.set(CACHE_KEY_LAST_SYNC, disk.savedAt)
-    _state.state = 'done'
     _state.cached = disk.items.length
     _state.lastSync = disk.savedAt
+
+    const ageMs = Date.now() - disk.savedAt
+    const isFresh = ageMs < TTL_MS
+
+    if (isFresh) {
+      console.log(`[ItemCache] ✅ Disk cache fresh (${disk.items.length} items, age: ${Math.round(ageMs / 60000)}min) — loading into memory`)
+      _state.state = 'done'
+      _state.progress = 100
+      setTimeout(() => emit('items-cache:sync-complete', {
+        total: disk.items.length, errors: 0, lastSync: disk.savedAt, fromCache: true
+      }), 500)
+      scheduleAutoRefresh()
+      return
+    }
+
+    // Stale, but usable right now — serve it and refresh quietly underneath.
+    console.log(`[ItemCache] ♻️  Disk cache stale (${disk.items.length} items, age: ${Math.round(ageMs / 60000)}min) — serving stale data while refreshing in background`)
+    _state.state = 'stale'
     _state.progress = 100
     setTimeout(() => emit('items-cache:sync-complete', {
-      total: disk.items.length, errors: 0, lastSync: disk.savedAt, fromCache: true
+      total: disk.items.length, errors: 0, lastSync: disk.savedAt, fromCache: true, stale: true
     }), 500)
-    scheduleAutoRefresh()
-    return
+    // falls through to schedule a background requestSync() below
+  } else {
+    console.log('[ItemCache] 💾 No usable disk cache — search results will be empty until the first sync completes')
   }
 
-  // 3. Cache stale or missing — fetch from API via renderer
-  console.log(`[ItemCache] 🕐 Initial sync scheduled in ${delayMs / 1000}s...`)
+  // 3. Kick off (or continue) a background refresh from the API via the renderer.
+  //    This runs whether we had stale data to serve or nothing at all.
+  console.log(`[ItemCache] 🕐 Background sync scheduled in ${delayMs / 1000}s...`)
   setTimeout(() => requestSync(), delayMs)
   scheduleAutoRefresh()
 }

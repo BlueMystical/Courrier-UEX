@@ -390,6 +390,17 @@ onUnmounted(() => {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+/* Sin esto, ningún "height: 100%" hijo (como .vehicles-container) tiene
+   una altura real de la que heredar, y termina scrolleando la ventana
+   entera en vez de solo su contenido interno. */
+html,
+body,
+#app {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
 body,
 #app {
     font-family: 'Segoe UI', sans-serif;
@@ -411,6 +422,8 @@ body,
 .card.p-0 {
     padding: 2px !important;
     border-radius: 6px;
+    flex-shrink: 0;
+    /* menubar: nunca se comprime */
 }
 
 .custom-menubar {
@@ -459,6 +472,27 @@ body,
 
 .layout-wrapper {
     font-family: 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Contenedor del router-view: se lleva TODO el espacio restante,
+   y recorta su overflow — así cada vista puede scrollear su propio
+   contenido internamente (ver Vehicles.vue) sin que la ventana entera
+   se desborde. */
+.card.mt-2 {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.card.mt-2>* {
+    flex: 1;
+    min-height: 0;
 }
 
 .menu-shortcut-badge {

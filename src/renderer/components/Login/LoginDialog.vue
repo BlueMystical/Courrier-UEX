@@ -252,7 +252,8 @@ async function handleLogin(closeCallback) {
               { label: 'Comodities', icon: 'pi pi-box', shortcut: shortcuts.commodities, route: '/buysell/comodities' }, //<- Ruta como esta declarada en router.js
               { label: 'Items', icon: 'pi pi-objects-column', shortcut: shortcuts.items, route: '/buysell/items' },
               { label: 'Vehicles', icon: 'pi pi-car', shortcut: shortcuts.vehicles, route: '/buysell/vehicles' },
-              { label: 'Marketplace', icon: 'pi pi-shopping-bag', shortcut: shortcuts.marketplace, route: '/buysell/marketplace' }
+              { label: 'Marketplace', icon: 'pi pi-shopping-bag', shortcut: shortcuts.marketplace, route: '/buysell/marketplace' },
+              { label: 'Trade Routes', icon: 'pi pi-map', route: '/buysell/routes' }
             ]
           },
           {

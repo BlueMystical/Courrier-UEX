@@ -46,74 +46,79 @@
                 @click="clearFilters" />
         </div>
 
-        <!-- Loading -->
-        <div v-if="loading" class="loading-state">
-            <ProgressSpinner />
-            <p>Loading marketplace...</p>
-        </div>
+        <!-- Scrollable content area (only this part scrolls) -->
+        <ScrollPanel class="content-scroll">
 
-        <!-- Error -->
-        <Message v-else-if="error" severity="error" class="error-msg">{{ error }}</Message>
+            <!-- Loading -->
+            <div v-if="loading" class="loading-state">
+                <ProgressSpinner />
+                <p>Loading marketplace...</p>
+            </div>
 
-        <!-- Empty -->
-        <div v-else-if="filteredListings.length === 0" class="empty-state">
-            <i class="pi pi-inbox"></i>
-            <p>No listings match your filters</p>
-            <Button label="Clear filters" severity="secondary" outlined size="small" @click="clearFilters" />
-        </div>
+            <!-- Error -->
+            <Message v-else-if="error" severity="error" class="error-msg">{{ error }}</Message>
 
-        <!-- Listings grid -->
-        <div v-else class="listings-grid">
-            <div v-for="listing in filteredListings" :key="listing.id" class="listing-card"
-                :class="{ selected: selectedListing?.id === listing.id, sold: listing.is_sold_out }"
-                @click="selectListing(listing)">
-                <!-- Photo -->
-                <div class="listing-photo-wrapper">
-                    <img v-if="firstPhoto(listing)" :src="firstPhoto(listing)" :alt="listing.title"
-                        class="listing-photo" @error="onImageError($event)" />
-                    <div v-else class="listing-photo-placeholder">
-                        <i class="pi pi-image"></i>
-                    </div>
+            <!-- Empty -->
+            <div v-else-if="filteredListings.length === 0" class="empty-state">
+                <i class="pi pi-inbox"></i>
+                <p>No listings match your filters</p>
+                <Button label="Clear filters" severity="secondary" outlined size="small" @click="clearFilters" />
+            </div>
 
-                    <!-- Operation badge -->
-                    <div class="op-badge" :class="listing.operation">
-                        <i :class="listing.operation === 'sell' ? 'pi pi-tag' : 'pi pi-cart-plus'"></i>
-                        {{ listing.operation === 'sell' ? 'SELL' : 'BUY' }}
-                    </div>
-
-                    <!-- Sold out overlay -->
-                    <div v-if="listing.is_sold_out" class="sold-overlay">SOLD OUT</div>
-                </div>
-
-                <!-- Info -->
-                <div class="listing-info">
-                    <div class="listing-meta">
-                        <span class="listing-type">{{ listing.type }}</span>
-                        <span class="listing-durability" v-if="listing.durability < 100">
-                            <i class="pi pi-wrench"></i> {{ listing.durability }}%
-                        </span>
-                    </div>
-
-                    <h3 class="listing-title">{{ listing.title }}</h3>
-
-                    <div class="listing-location">
-                        <i class="pi pi-map-marker"></i>
-                        <span>{{ listing.location || '—' }}</span>
-                    </div>
-
-                    <div class="listing-footer">
-                        <div class="listing-price" :class="listing.operation">
-                            <span class="price-amount">{{ formatAUEC(listing.price) }}</span>
-                            <span class="price-currency">aUEC</span>
+            <!-- Listings grid -->
+            <div v-else class="listings-grid">
+                <div v-for="listing in filteredListings" :key="listing.id" class="listing-card"
+                    :class="{ selected: selectedListing?.id === listing.id, sold: listing.is_sold_out }"
+                    @click="selectListing(listing)">
+                    <!-- Photo -->
+                    <div class="listing-photo-wrapper">
+                        <img v-if="firstPhoto(listing)" :src="firstPhoto(listing)" :alt="listing.title"
+                            class="listing-photo" @error="onImageError($event)" />
+                        <div v-else class="listing-photo-placeholder">
+                            <i class="pi pi-image"></i>
                         </div>
-                        <div class="listing-seller">
-                            <i class="pi pi-user"></i>
-                            <span>{{ listing.user_username }}</span>
+
+                        <!-- Operation badge -->
+                        <div class="op-badge" :class="listing.operation">
+                            <i :class="listing.operation === 'sell' ? 'pi pi-tag' : 'pi pi-cart-plus'"></i>
+                            {{ listing.operation === 'sell' ? 'SELL' : 'BUY' }}
+                        </div>
+
+                        <!-- Sold out overlay -->
+                        <div v-if="listing.is_sold_out" class="sold-overlay">SOLD OUT</div>
+                    </div>
+
+                    <!-- Info -->
+                    <div class="listing-info">
+                        <div class="listing-meta">
+                            <span class="listing-type">{{ listing.type }}</span>
+                            <span class="listing-durability" v-if="listing.durability < 100">
+                                <i class="pi pi-wrench"></i> {{ listing.durability }}%
+                            </span>
+                        </div>
+
+                        <h3 class="listing-title">{{ listing.title }}</h3>
+
+                        <div class="listing-location">
+                            <i class="pi pi-map-marker"></i>
+                            <span>{{ listing.location || '—' }}</span>
+                        </div>
+
+                        <div class="listing-footer">
+                            <div class="listing-price" :class="listing.operation">
+                                <span class="price-amount">{{ formatAUEC(listing.price) }}</span>
+                                <span class="price-currency">aUEC</span>
+                            </div>
+                            <div class="listing-seller">
+                                <i class="pi pi-user"></i>
+                                <span>{{ listing.user_username }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+
+        </ScrollPanel>
 
         <!-- Drawer -->
         <Drawer v-model:visible="showDrawer" position="right" :style="{ width: '420px' }" :modal="false"
@@ -268,6 +273,7 @@ import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import Drawer from 'primevue/drawer'
 import Divider from 'primevue/divider'
+import ScrollPanel from 'primevue/scrollpanel'
 import { useNotify } from '@/components/Notificaciones/Notify'
 
 const notify = useNotify()
@@ -455,7 +461,10 @@ function formatDate(timestamp) {
     gap: 1rem;
     padding: 1.5rem;
     height: 100%;
+    width: 100%;
+    min-width: 0;
     overflow: hidden;
+    box-sizing: border-box;
 }
 
 /* ── HEADER ── */
@@ -465,6 +474,7 @@ function formatDate(timestamp) {
     align-items: center;
     gap: 1rem;
     flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .header-title {
@@ -556,6 +566,31 @@ function formatDate(timestamp) {
     align-items: center;
     gap: 0.75rem;
     flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+/* ── SCROLLABLE CONTENT AREA ── */
+/* Only this part scrolls. `min-height: 0` is the key fix: without it,
+   this flex child would ignore overflow and just expand the parent
+   instead of scrolling internally. We deliberately do NOT force a
+   height on :deep(.p-scrollpanel-content) — that fights PrimeVue's own
+   internal negative-margin/scrollbar calc and squashes the content. */
+.content-scroll {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    min-width: 0;
+}
+
+.content-scroll :deep(.p-scrollpanel-wrapper) {
+    height: 100%;
+    width: 100%;
+}
+
+.content-scroll :deep(.p-scrollpanel-content) {
+    width: 100%;
+    box-sizing: border-box;
+    padding-right: 0.75rem;
 }
 
 .search-input {
@@ -577,7 +612,7 @@ function formatDate(timestamp) {
     align-items: center;
     justify-content: center;
     gap: 1rem;
-    flex: 1;
+    min-height: 300px;
     color: var(--p-text-muted-color);
 }
 
@@ -591,7 +626,7 @@ function formatDate(timestamp) {
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    flex: 1;
+    min-height: 300px;
     color: var(--p-text-muted-color);
 }
 
@@ -605,9 +640,8 @@ function formatDate(timestamp) {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 1rem;
-    overflow-y: auto;
-    padding-right: 0.25rem;
-    flex: 1;
+    align-content: start;
+    /* scrolling is handled by the parent ScrollPanel, not this grid */
 }
 
 /* ── CARD ── */

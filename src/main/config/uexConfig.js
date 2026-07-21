@@ -8,6 +8,8 @@ const UEX_CONFIG = {
     ITEMS: '/items',
     CATEGORIES: '/categories',
     VEHICLES: '/vehicles',
+    STAR_SYSTEMS: '/star_systems',
+    PLANETS: '/planets',
     DATA_SUBMIT: '/data_submit'
   },
 

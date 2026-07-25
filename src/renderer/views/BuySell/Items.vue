@@ -19,6 +19,9 @@
                     <span v-else-if="cacheStatus === 'error'" class="cache-badge cache-badge--error">
                         <i class="pi pi-exclamation-triangle"></i> Cache unavailable
                     </span>
+
+                    <Button v-if="selectedItem || selectedCategoryId" label="Reset" icon="pi pi-refresh"
+                        text severity="secondary" size="small" class="ml-auto ResetBtn" @click="resetAll" />
                 </h2>
 
                 <div class="flex flex-column gap-3">
@@ -31,13 +34,14 @@
 
                         <AutoComplete ref="itemSearchInput" v-model="selectedItem" :suggestions="filteredItems"
                             showClear @complete="searchItem" optionLabel="name" field="name"
-                            :disabled="cacheStatus !== 'ready'" :placeholder="searchPlaceholder" forceSelection
+                            :disabled="cacheStatus !== 'ready' || loadingCategoryItems"
+                            :placeholder="searchPlaceholder" forceSelection
                             class="search-input-container" inputClass="custom-input" @item-select="onItemSelect">
                             <template #option="slotProps">
                                 <div class="item-option">
                                     <span class="item-option-name">{{ slotProps.option.name }}</span>
                                     <span class="item-option-category">{{ slotProps.option.category_name ||
-                                        slotProps.option.type }}</span>
+                                        slotProps.option.category || slotProps.option.type }}</span>
                                 </div>
                             </template>
                         </AutoComplete>
@@ -51,6 +55,24 @@
 
                         <Button v-if="selectedItem" icon="pi pi-times" severity="secondary" rounded text class="mr-2"
                             @click="clearSearch" />
+                    </div>
+
+                    <!-- ============ BÚSQUEDA POR CATEGORÍA ============ -->
+                    <div class="category-row">
+                        <span class="category-row-label text-500 text-sm">
+                            <i class="pi pi-sitemap"></i> Or browse by category
+                        </span>
+                        <div class="category-filter">
+                            <TreeSelect v-model="treeSelectionModel" :options="treeCategories"
+                                selectionMode="single" display="chip"
+                                :placeholder="categories.length ? 'All Categories' : 'Loading categories...'"
+                                :disabled="!categories.length" showClear filter
+                                class="category-select" />
+                            <span v-if="selectedCategoryId" class="category-count">
+                                <i v-if="loadingCategoryItems" class="pi pi-spin pi-spinner"></i>
+                                <template v-else>{{ categoryItems.length }} items</template>
+                            </span>
+                        </div>
                     </div>
 
                     <!-- Filtros: Buy/Sell + Sistema Estelar -->
@@ -71,8 +93,20 @@
 
         <!-- ================= ZONA SCROLLEABLE ================= -->
         <div class="items-scroll">
+
+            <!-- ============ RESULTADOS DE PRECIOS (item seleccionado) ============ -->
             <section v-if="selectedItem"
                 class="results-section border-round-xl shadow-3 bg-card w-full animate-in fade-in">
+                <div class="results-header flex align-items-center gap-2 px-3 pt-3">
+                    <Button v-if="selectedCategoryId" label="Back to category" icon="pi pi-arrow-left" text
+                        size="small" @click="backToBrowse" />
+                    <h3 class="m-0 text-700 flex align-items-center gap-2">
+                        {{ selectedItem.name }}
+                    </h3>
+                    <Button label="Attributes" icon="pi pi-info-circle" text size="small" class="ml-auto"
+                        :badge="visibleAttributes.length ? String(visibleAttributes.length) : undefined"
+                        :loading="loadingAttributes" @click="attributesDrawerVisible = true" />
+                </div>
                 <DataView :value="filteredPrices" paginator :rows="10" :rowsPerPageOptions="[5, 10, 25, 50]">
                     <template #list="slotProps">
                         <div class="flex flex-column w-full px-2">
@@ -142,19 +176,99 @@
                     </template>
                 </DataView>
             </section>
+
+            <!-- ============ GRILLA DE NAVEGACIÓN POR CATEGORÍA ============ -->
+            <section v-else-if="selectedCategoryId"
+                class="browse-section border-round-xl shadow-3 bg-card w-full animate-in fade-in">
+                <div class="browse-header flex align-items-center justify-content-between flex-wrap gap-2 px-4 pt-4 pb-2">
+                    <h3 class="m-0 text-700 flex align-items-center gap-2">
+                        <i class="pi pi-sitemap text-primary"></i>
+                        {{ selectedCategoryName }}
+                        <span v-if="!loadingCategoryItems" class="text-500 font-normal text-sm">
+                            ({{ categoryItems.length }} items)
+                        </span>
+                    </h3>
+                    <Button label="Clear Category" icon="pi pi-times" text severity="secondary"
+                        @click="selectedCategoryId = null" />
+                </div>
+
+                <div v-if="loadingCategoryItems" class="flex align-items-center justify-content-center py-8 gap-2 text-500">
+                    <i class="pi pi-spin pi-spinner"></i> Loading items in this category...
+                </div>
+
+                <DataView v-else :value="categoryItems" layout="grid" paginator :rows="24"
+                    :rowsPerPageOptions="[12, 24, 48]">
+                    <template #grid="slotProps">
+                        <div class="browse-grid">
+                            <div v-for="item in slotProps.items" :key="item.id" class="browse-card"
+                                @click="selectItem(item)">
+                                <div class="browse-card-name">{{ item.name }}</div>
+                                <div class="browse-card-meta">
+                                    <span v-if="item.company_name">{{ item.company_name }}</span>
+                                    <span v-else-if="item.category_name || item.category">
+                                        {{ item.category_name || item.category }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template #empty>
+                        <div class="flex flex-column align-items-center justify-content-center py-8 text-center">
+                            <i class="pi pi-inbox text-primary opacity-50 mb-3" style="font-size: 2.5rem"></i>
+                            <h3 class="m-0 text-700">No items in this category</h3>
+                        </div>
+                    </template>
+                </DataView>
+            </section>
+
+            <!-- ============ ESTADO INICIAL / VACÍO ============ -->
+            <section v-else class="hint-section flex flex-column align-items-center justify-content-center text-center py-8">
+                <i class="pi pi-compass text-primary opacity-40 mb-3" style="font-size: 3rem"></i>
+                <h3 class="m-0 text-700">Type an item name or choose a category to get started</h3>
+                <p class="text-500 mt-2">Prices from terminals across the verse will show up here.</p>
+            </section>
         </div>
+
+        <!-- ================= DRAWER DE ATRIBUTOS ================= -->
+        <Drawer v-model:visible="attributesDrawerVisible" position="right" class="attributes-drawer">
+            <template #header>
+                <span class="font-bold text-primary">{{ selectedItem?.name || 'Item Attributes' }}</span>
+            </template>
+
+            <Fieldset legend="Specifications" :toggleable="false">
+                <div v-if="loadingAttributes" class="flex align-items-center gap-2 text-500 py-3">
+                    <i class="pi pi-spin pi-spinner"></i> Loading attributes...
+                </div>
+                <ul v-else-if="visibleAttributes.length" class="attributes-list">
+                    <li v-for="attr in visibleAttributes" :key="attr.id" class="attribute-row">
+                        <span class="attribute-label">{{ attr.attribute_name }}</span>
+                        <span class="attribute-value">
+                            {{ attr.value }}
+                            <span v-if="attr.unit" class="attribute-unit">{{ attr.unit }}</span>
+                        </span>
+                    </li>
+                </ul>
+                <div v-else class="text-500 text-sm py-3">
+                    No attributes available for this item.
+                </div>
+            </Fieldset>
+        </Drawer>
 
     </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import AutoComplete from 'primevue/autocomplete';
 import DataView from 'primevue/dataview';
 import Button from 'primevue/button';
 import SelectButton from 'primevue/selectbutton';
 import InputNumber from 'primevue/inputnumber';
 import Select from 'primevue/select';
+import TreeSelect from 'primevue/treeselect';
+import Drawer from 'primevue/drawer';
+import Fieldset from 'primevue/fieldset';
 import Tooltip from 'primevue/tooltip';
 import { useNotify } from '@/components/Notificaciones/Notify';
 
@@ -166,6 +280,9 @@ const allItems = ref([]);           // todos los items del cache
 const filteredItems = ref([]);      // sugerencias del autocomplete
 const selectedItem = ref(null);
 const prices = ref([]);
+const itemAttributes = ref([]);
+const loadingAttributes = ref(false);
+const attributesDrawerVisible = ref(false);
 const filterMode = ref('all');
 const quantity = ref(1);
 const debouncedQuantity = ref(1);
@@ -181,9 +298,18 @@ const starSystems = ref([]);
 const selectedSystem = ref(null);
 const loadingSystems = ref(false);
 
+// Categorías de items
+const categories = ref([]);            // catálogo completo /categories?type=item
+const selectedCategoryId = ref(null);  // id_category elegido
+const categoryItems = ref([]);         // items de la categoría elegida, vía API en vivo
+const loadingCategoryItems = ref(false);
+
 const API_BASE = 'https://api.uexcorp.uk/2.0';
 const API_ITEM_PRICES = `${API_BASE}/items_prices?id_item=`;
+const API_ITEM_ATTRIBUTES = `${API_BASE}/items_attributes?id_item=`;
 const API_STAR_SYSTEMS = `${API_BASE}/star_systems`;
+const API_CATEGORIES = `${API_BASE}/categories?type=item`;
+const API_ITEMS_BY_CATEGORY = `${API_BASE}/items?id_category=`;
 
 let debounceTimeout = null;
 
@@ -196,6 +322,11 @@ const filterOptions = [
 const searchPlaceholder = computed(() => {
     if (cacheStatus.value === 'loading') return 'Loading items...'
     if (cacheStatus.value === 'error') return 'Cache unavailable — try restarting'
+    if (selectedCategoryId.value) {
+        return loadingCategoryItems.value
+            ? `Loading ${selectedCategoryName.value} items...`
+            : `Search within ${selectedCategoryName.value} (${categoryItems.value.length})...`
+    }
     return `Search among ${totalItems.value.toLocaleString()} items...`
 });
 
@@ -207,12 +338,50 @@ const systemOptions = computed(() =>
         .sort((a, b) => a.label.localeCompare(b.label))
 );
 
+// Categorías como árbol (Sección > Categoría) para el TreeSelect
+const treeCategories = computed(() => {
+    const groups = {};
+    for (const cat of categories.value) {
+        const section = cat.section || 'Other';
+        if (!groups[section]) {
+            groups[section] = { key: `sec-${section}`, label: section, selectable: false, children: [] };
+        }
+        groups[section].children.push({ key: String(cat.id), label: cat.name });
+    }
+    return Object.values(groups)
+        .sort((a, b) => a.label.localeCompare(b.label))
+        .map(g => ({ ...g, children: g.children.sort((a, b) => a.label.localeCompare(b.label)) }));
+});
+
+// El TreeSelect espera/emite el formato { [nodeKey]: true } — este puente lo
+// traduce hacia/desde selectedCategoryId (número), que es lo que usa el resto de la vista.
+const treeSelectionModel = computed({
+    get() {
+        return selectedCategoryId.value != null ? { [String(selectedCategoryId.value)]: true } : null;
+    },
+    set(val) {
+        const key = val ? Object.keys(val)[0] : null;
+        selectedCategoryId.value = key ? Number(key) : null;
+    }
+});
+
+const selectedCategoryName = computed(() => {
+    const found = categories.value.find(c => c.id === selectedCategoryId.value);
+    return found ? found.name : '';
+});
+
+// Atributos con valor real — se ocultan los que vienen vacíos (p.ej. "" sin cargar aún)
+const visibleAttributes = computed(() =>
+    itemAttributes.value.filter(a => a.value !== null && a.value !== '')
+);
+
 onMounted(async () => {
     // Carga cache de items y sistemas en paralelo
     try {
-        const [cachedItems, systemsRes] = await Promise.all([
+        const [cachedItems, systemsRes, categoriesRes] = await Promise.all([
             window.api.Items.getAll(),
-            fetch(API_STAR_SYSTEMS)
+            fetch(API_STAR_SYSTEMS),
+            fetch(API_CATEGORIES)
         ]);
 
         // Items desde cache local
@@ -228,9 +397,34 @@ onMounted(async () => {
         const systemsJson = await systemsRes.json();
         if (systemsJson.status === 'ok') starSystems.value = systemsJson.data;
 
+        // Categorías de items
+        const categoriesJson = await categoriesRes.json();
+        if (categoriesJson.status === 'ok') categories.value = categoriesJson.data;
+
     } catch (e) {
         cacheStatus.value = 'error';
         notify.error('Error loading item cache');
+    }
+});
+
+// Al elegir una categoría, se traen sus items en vivo (no se asume que el cache
+// local tenga id_category) y se resetea la selección/precios actuales.
+watch(selectedCategoryId, async (newVal) => {
+    selectedItem.value = null;
+    prices.value = [];
+    categoryItems.value = [];
+    if (!newVal) return;
+
+    loadingCategoryItems.value = true;
+    try {
+        const res = await fetch(`${API_ITEMS_BY_CATEGORY}${newVal}`);
+        const json = await res.json();
+        if (json.status === 'ok') categoryItems.value = json.data;
+        else notify.warn('Could not load items for this category');
+    } catch (e) {
+        notify.error('Error loading category items');
+    } finally {
+        loadingCategoryItems.value = false;
     }
 });
 
@@ -238,21 +432,25 @@ onUnmounted(() => {
     clearTimeout(debounceTimeout);
 });
 
-// Búsqueda fuzzy directa sobre el cache — sin llamadas a API
+// Búsqueda fuzzy — sobre el cache completo, o restringida a la categoría activa
 const searchItem = (event) => {
     const query = (event.query || '').trim().toLowerCase();
-    if (!allItems.value.length) return;
+    const pool = selectedCategoryId.value ? categoryItems.value : allItems.value;
+    if (!pool.length) {
+        filteredItems.value = [];
+        return;
+    }
 
     if (query.length === 0) {
         // Sin query: mostrar los primeros 50 para no saturar el dropdown
-        filteredItems.value = allItems.value.slice(0, 50);
+        filteredItems.value = pool.slice(0, 50);
         return;
     }
 
     // Búsqueda: coincidencia al inicio primero, luego cualquier posición
     const starts = [];
     const contains = [];
-    for (const item of allItems.value) {
+    for (const item of pool) {
         const name = (item.name || '').toLowerCase();
         if (name.startsWith(query)) {
             starts.push(item);
@@ -268,20 +466,54 @@ const searchItem = (event) => {
     ];
 };
 
-const onItemSelect = async (event) => {
+// Selección de item — usada tanto por el autocomplete como por la grilla de categoría
+const selectItem = async (item) => {
+    if (!item) return;
+    selectedItem.value = item;
     prices.value = [];
+    itemAttributes.value = [];
     filterMode.value = 'all';
     selectedSystem.value = null;
+    loadingAttributes.value = true;
     try {
-        const res = await fetch(`${API_ITEM_PRICES}${event.value.id}`);
-        const json = await res.json();
-        if (json.status === 'ok') {
-            prices.value = json.data;
+        const [pricesRes, attrsRes] = await Promise.all([
+            fetch(`${API_ITEM_PRICES}${item.id}`),
+            fetch(`${API_ITEM_ATTRIBUTES}${item.id}`)
+        ]);
+
+        const pricesJson = await pricesRes.json();
+        if (pricesJson.status === 'ok') {
+            prices.value = pricesJson.data;
             if (prices.value.length === 0) notify.warn('No market records found for this item');
         }
+
+        const attrsJson = await attrsRes.json();
+        if (attrsJson.status === 'ok') itemAttributes.value = attrsJson.data;
     } catch (e) {
-        notify.error('Error loading prices');
+        notify.error('Error loading item data');
+    } finally {
+        loadingAttributes.value = false;
     }
+};
+
+const onItemSelect = (event) => selectItem(event.value);
+
+// Vuelve de los resultados de precio a la grilla de la categoría, sin perder el filtro
+const backToBrowse = () => {
+    selectedItem.value = null;
+    prices.value = [];
+    itemAttributes.value = [];
+    attributesDrawerVisible.value = false;
+};
+
+const resetAll = () => {
+    selectedItem.value = null;
+    prices.value = [];
+    itemAttributes.value = [];
+    attributesDrawerVisible.value = false;
+    filterMode.value = 'all';
+    selectedSystem.value = null;
+    selectedCategoryId.value = null;
 };
 
 const handleQuantityChange = (e) => {
@@ -310,6 +542,8 @@ const formatTooltipDate = (ts) => {
 const clearSearch = () => {
     selectedItem.value = null;
     prices.value = [];
+    itemAttributes.value = [];
+    attributesDrawerVisible.value = false;
     filterMode.value = 'all';
     selectedSystem.value = null;
 };
@@ -469,6 +703,166 @@ const filteredPrices = computed(() => {
 
 :deep(.p-autocomplete-panel) {
     min-width: 420px !important;
+}
+
+/* ================= BÚSQUEDA POR CATEGORÍA ================= */
+
+.category-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 0.25rem;
+}
+
+.category-row-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+
+.category-row-label i {
+    color: var(--p-primary-color);
+    font-size: 0.85rem;
+}
+
+.category-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex: 1;
+    min-width: 240px;
+}
+
+.category-select {
+    flex: 1;
+    min-width: 220px;
+}
+
+.category-count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--p-primary-color);
+    white-space: nowrap;
+}
+
+.ResetBtn {
+    flex-shrink: 0;
+}
+
+/* ================= GRILLA DE NAVEGACIÓN ================= */
+
+.browse-section {
+    padding-bottom: 1rem;
+}
+
+.browse-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+    padding: 0.5rem 1.25rem 1.25rem;
+    width: 100%;
+}
+
+.browse-card {
+    border: 1px solid var(--p-content-border-color);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
+    background: var(--p-content-background);
+}
+
+.browse-card:hover {
+    border-color: var(--p-primary-color);
+    background-color: var(--p-content-hover-background, rgba(255, 255, 255, 0.04));
+    transform: translateY(-2px);
+}
+
+.browse-card-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--p-primary-color);
+    margin-bottom: 0.25rem;
+}
+
+.browse-card-meta {
+    font-size: 0.75rem;
+    color: var(--p-text-muted-color, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.results-header {
+    border-bottom: 1px solid var(--p-content-border-color);
+    margin-bottom: 0.25rem;
+    padding-bottom: 0.5rem;
+}
+
+.results-header h3 {
+    font-size: 1rem;
+    opacity: 0.85;
+}
+
+/* ================= DRAWER DE ATRIBUTOS ================= */
+
+:deep(.attributes-drawer) {
+    width: 26rem;
+}
+
+:deep(.attributes-drawer .p-fieldset-legend) {
+    font-weight: 700;
+}
+
+.attributes-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.attribute-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px dashed var(--p-content-border-color);
+}
+
+.attribute-row:last-child {
+    border-bottom: none;
+}
+
+.attribute-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--p-text-muted-color, #888);
+    flex-shrink: 0;
+}
+
+.attribute-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--p-primary-color);
+    text-align: right;
+}
+
+.attribute-unit {
+    font-size: 0.7rem;
+    font-weight: 400;
+    opacity: 0.7;
+    margin-left: 2px;
+}
+
+/* ================= ESTADO VACÍO INICIAL ================= */
+
+.hint-section {
+    min-height: 200px;
 }
 
 /* ================= FILTROS ================= */

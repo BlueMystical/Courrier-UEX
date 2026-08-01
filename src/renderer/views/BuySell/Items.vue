@@ -11,10 +11,12 @@
 
                     <!-- Indicador de estado del cache -->
                     <span v-if="cacheStatus === 'loading'" class="cache-badge cache-badge--loading">
-                        <i class="pi pi-spin pi-spinner"></i> Loading item cache...
+                        <i class="pi pi-spin pi-spinner"></i>
+                        Loading item cache...<template v-if="syncProgress?.progress != null"> {{ syncProgress.progress }}%</template>
                     </span>
                     <span v-else-if="cacheStatus === 'ready'" class="cache-badge cache-badge--ready">
                         <i class="pi pi-check-circle"></i> {{ totalItems.toLocaleString() }} items
+                        <i v-if="isSyncing" class="pi pi-spin pi-sync" v-tooltip.top="'Refreshing item cache in the background'"></i>
                     </span>
                     <span v-else-if="cacheStatus === 'error'" class="cache-badge cache-badge--error">
                         <i class="pi pi-exclamation-triangle"></i> Cache unavailable
@@ -102,6 +104,9 @@
                         size="small" @click="backToBrowse" />
                     <h3 class="m-0 text-700 flex align-items-center gap-2">
                         {{ selectedItem.name }}
+                        <span v-if="selectedItem.section" class="header-type-chip">
+                            {{ selectedItem.section }}<template v-if="selectedItem.category"> · {{ selectedItem.category }}</template>
+                        </span>
                     </h3>
                     <Button label="Attributes" icon="pi pi-info-circle" text size="small" class="ml-auto"
                         :badge="visibleAttributes.length ? String(visibleAttributes.length) : undefined"
@@ -236,6 +241,48 @@
                 <span class="font-bold text-primary">{{ selectedItem?.name || 'Item Attributes' }}</span>
             </template>
 
+            <Fieldset legend="Overview" :toggleable="false" class="mb-3">
+                <div v-if="selectedItem" class="flex flex-column gap-2">
+                    <ul class="attributes-list">
+                        <li v-if="selectedItem.section" class="attribute-row">
+                            <span class="attribute-label">Type</span>
+                            <span class="type-chip type-chip--section">{{ selectedItem.section }}</span>
+                        </li>
+                        <li v-if="selectedItem.category" class="attribute-row">
+                            <span class="attribute-label">Category</span>
+                            <span class="type-chip">{{ selectedItem.category }}</span>
+                        </li>
+                        <li v-if="selectedItem.company_name" class="attribute-row">
+                            <span class="attribute-label">Manufacturer</span>
+                            <span class="attribute-value">{{ selectedItem.company_name }}</span>
+                        </li>
+                        <li v-if="selectedItem.vehicle_name" class="attribute-row">
+                            <span class="attribute-label">Vehicle</span>
+                            <span class="attribute-value">{{ selectedItem.vehicle_name }}</span>
+                        </li>
+                        <li v-if="selectedItem.quality" class="attribute-row">
+                            <span class="attribute-label">Quality</span>
+                            <span class="attribute-value">{{ selectedItem.quality }}</span>
+                        </li>
+                    </ul>
+
+                    <div v-if="itemFlags.length" class="flag-badges">
+                        <span v-for="flag in itemFlags" :key="flag.key" class="flag-badge"
+                            :class="{ 'flag-badge--exclusive': flag.exclusive }">
+                            {{ flag.label }}
+                        </span>
+                    </div>
+
+                    <a v-if="selectedItem.wiki" :href="selectedItem.wiki" target="_blank" rel="noopener noreferrer"
+                        class="wiki-link">
+                        <i class="pi pi-external-link"></i> View on Wiki
+                    </a>
+                </div>
+                <div v-else class="text-500 text-sm py-3">
+                    No additional info available for this item.
+                </div>
+            </Fieldset>
+
             <Fieldset legend="Specifications" :toggleable="false">
                 <div v-if="loadingAttributes" class="flex align-items-center gap-2 text-500 py-3">
                     <i class="pi pi-spin pi-spinner"></i> Loading attributes...
@@ -259,7 +306,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import AutoComplete from 'primevue/autocomplete';
 import DataView from 'primevue/dataview';
 import Button from 'primevue/button';
@@ -292,6 +339,8 @@ const itemSearchInput = ref(null);
 // Cache status
 const cacheStatus = ref('loading'); // 'loading' | 'ready' | 'error'
 const totalItems = computed(() => allItems.value.length);
+const isSyncing = ref(false);          // true mientras corre un sync en background (con o sin cache ya lista)
+const syncProgress = ref(null);        // { done, total, progress, category, section } — del evento items-cache:progress
 
 // Sistemas estelares
 const starSystems = ref([]);
@@ -375,6 +424,35 @@ const visibleAttributes = computed(() =>
     itemAttributes.value.filter(a => a.value !== null && a.value !== '')
 );
 
+// Flags booleanas del item (comodidad, cosechable, exclusividades) para mostrar como badges
+const itemFlags = computed(() => {
+    if (!selectedItem.value) return [];
+    const d = selectedItem.value;
+    const flags = [];
+    if (d.is_commodity) flags.push({ key: 'commodity', label: 'Commodity' });
+    if (d.is_harvestable) flags.push({ key: 'harvestable', label: 'Harvestable' });
+    if (d.is_exclusive_pledge) flags.push({ key: 'pledge', label: 'Pledge Exclusive', exclusive: true });
+    if (d.is_exclusive_subscriber) flags.push({ key: 'subscriber', label: 'Subscriber Exclusive', exclusive: true });
+    if (d.is_exclusive_concierge) flags.push({ key: 'concierge', label: 'Concierge Exclusive', exclusive: true });
+    return flags;
+});
+
+// Al quedar el cache listo por primera vez, poner el foco en el buscador.
+// Se guarda un flag para no volver a robar el foco en re-syncs posteriores
+// (cacheStatus vuelve a 'ready' cada vez que termina un sync en background).
+let hasFocusedSearch = false;
+const focusSearchInput = () => {
+    const el = itemSearchInput.value?.$el?.querySelector('input');
+    if (el) el.focus();
+};
+
+watch(cacheStatus, (status) => {
+    if (status === 'ready' && !hasFocusedSearch) {
+        hasFocusedSearch = true;
+        nextTick(focusSearchInput);
+    }
+});
+
 onMounted(async () => {
     // Carga cache de items y sistemas en paralelo
     try {
@@ -388,10 +466,10 @@ onMounted(async () => {
         if (Array.isArray(cachedItems) && cachedItems.length > 0) {
             allItems.value = cachedItems;
             cacheStatus.value = 'ready';
-        } else {
-            cacheStatus.value = 'error';
-            notify.warn('Item cache is empty. Try running a sync first.');
         }
+        // Si viene vacío no es necesariamente un error: puede que el sync en
+        // background todavía no haya terminado. Se queda en 'loading' y los
+        // listeners de abajo la resuelven en cuanto termine.
 
         // Sistemas estelares
         const systemsJson = await systemsRes.json();
@@ -405,6 +483,40 @@ onMounted(async () => {
         cacheStatus.value = 'error';
         notify.error('Error loading item cache');
     }
+
+    // Listeners del sync de items en background (ver preload.js → window.api.Items).
+    // Cubren tanto el sync inicial (si la view monta antes de que termine) como
+    // los re-syncs periódicos posteriores, sin necesidad de recargar la view.
+    window.api.Items.onSyncStart(() => {
+        isSyncing.value = true;
+        if (!allItems.value.length) cacheStatus.value = 'loading';
+    });
+
+    window.api.Items.onProgress((data) => {
+        syncProgress.value = data;
+    });
+
+    window.api.Items.onSyncComplete(async () => {
+        isSyncing.value = false;
+        syncProgress.value = null;
+        try {
+            const items = await window.api.Items.getAll();
+            if (Array.isArray(items) && items.length > 0) {
+                const wasNotReady = cacheStatus.value !== 'ready';
+                allItems.value = items;
+                cacheStatus.value = 'ready';
+                if (wasNotReady) notify.success(`Item cache ready — ${items.length.toLocaleString()} items`);
+            }
+        } catch (e) {
+            // silencioso: si falla esta relectura puntual, el próximo sync-complete lo resuelve
+        }
+    });
+
+    window.api.Items.onSyncError((data) => {
+        isSyncing.value = false;
+        if (!allItems.value.length) cacheStatus.value = 'error';
+        notify.error(data?.error ? `Item cache sync failed: ${data.error}` : 'Item cache sync failed');
+    });
 });
 
 // Al elegir una categoría, se traen sus items en vivo (no se asume que el cache
@@ -430,6 +542,7 @@ watch(selectedCategoryId, async (newVal) => {
 
 onUnmounted(() => {
     clearTimeout(debounceTimeout);
+    window.api.Items.offAll();
 });
 
 // Búsqueda fuzzy — sobre el cache completo, o restringida a la categoría activa
@@ -484,7 +597,10 @@ const selectItem = async (item) => {
         const pricesJson = await pricesRes.json();
         if (pricesJson.status === 'ok') {
             prices.value = pricesJson.data;
-            if (prices.value.length === 0) notify.warn('No market records found for this item');
+            if (prices.value.length === 0) {
+                notify.warn('No market records found for this item');
+                attributesDrawerVisible.value = true;
+            }
         }
 
         const attrsJson = await attrsRes.json();
@@ -857,6 +973,75 @@ const filteredPrices = computed(() => {
     font-weight: 400;
     opacity: 0.7;
     margin-left: 2px;
+}
+
+/* ================= TIPO / OVERVIEW ================= */
+
+.header-type-chip {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding: 0.15rem 0.6rem;
+    border-radius: 20px;
+    background: rgba(var(--p-primary-color-rgb, 99, 102, 241), 0.12);
+    color: var(--p-primary-color);
+    border: 1px solid rgba(var(--p-primary-color-rgb, 99, 102, 241), 0.3);
+}
+
+.type-chip {
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.15rem 0.7rem;
+    border-radius: 12px;
+    background: var(--p-primary-color);
+    color: var(--p-primary-contrast-color, #fff);
+}
+
+.type-chip--section {
+    background: rgba(var(--p-primary-color-rgb, 99, 102, 241), 0.15);
+    color: var(--p-primary-color);
+    font-weight: 700;
+}
+
+.flag-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding-top: 0.6rem;
+}
+
+.flag-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding: 0.2rem 0.55rem;
+    border-radius: 20px;
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.flag-badge--exclusive {
+    background: rgba(234, 179, 8, 0.1);
+    color: #eab308;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.wiki-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--p-primary-color);
+    text-decoration: none;
+    padding-top: 0.4rem;
+}
+
+.wiki-link:hover {
+    text-decoration: underline;
 }
 
 /* ================= ESTADO VACÍO INICIAL ================= */

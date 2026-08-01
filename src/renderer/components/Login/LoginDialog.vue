@@ -164,6 +164,15 @@ async function fetchAvatarAsBase64(url) {
     return null
   }
 }
+// Lo mismo que el anterior, pero usando el IPC de Electron para que la descarga se haga en el proceso principal y no en el renderer.
+async function fetchAvatarAsBase64Ex(url) {
+  if (!url) return null
+  try {
+    return await window.api.avatar.fetchAsBase64(url)
+  } catch {
+    return null
+  }
+}
 
 // 3. LÓGICA DE VALIDACIÓN (MODO DESARROLLO / MOCK)
 async function handleLogin(closeCallback) {
@@ -241,7 +250,7 @@ async function handleLogin(closeCallback) {
         id: data.data.id,
         username: data.data.username,
         fullName: data.data.name,
-        photo: (await fetchAvatarAsBase64(data.data.avatar)) || data.data.avatar,
+        photo: (await fetchAvatarAsBase64Ex(data.data.avatar)) || data.data.avatar,
         role: data.data.is_datarunner > 0 ? 'Data Runner' : 'User',
         token: credentials.value.password, //<- Guardamos el Secret-Key para futuras llamadas a la API (si es necesario)
         funcionalidades: [
@@ -254,6 +263,13 @@ async function handleLogin(closeCallback) {
               { label: 'Vehicles', icon: 'pi pi-car', shortcut: shortcuts.vehicles, route: '/buysell/vehicles' },
               { label: 'Marketplace', icon: 'pi pi-shopping-bag', shortcut: shortcuts.marketplace, route: '/buysell/marketplace' },
               { label: 'Trade Routes', icon: 'pi pi-map', route: '/buysell/routes' }
+            ]
+          },
+          {
+            label: 'Hauling',
+            icon: 'pi pi-truck',
+            items: [
+              { label: 'Cargo Mission Planner', icon: 'pi pi-cog', route: '/utilities/hauling' }
             ]
           },
           {

@@ -101,9 +101,16 @@
             <span class="panel-item-label font-semibold">{{ item.label }}</span>
             <span v-if="item.items"
               :class="['panel-item-chevron', 'pi', active ? 'pi-chevron-down' : 'pi-chevron-right']" />
-          </a>
+          </a>          
         </template>
       </PanelMenu>
+
+      <div v-if="gameVersion" class="game-version-tag">
+        Star Citizen:
+        <span>Live <strong>{{ gameVersion.live }}</strong></span>
+        <span class="version-sep">·</span>
+        <span>PTU <strong>{{ gameVersion.ptu }}</strong></span>
+      </div>
     </div>
 
     <!-- Si no hay usuario, panel derecho vacío con mensaje -->
@@ -111,6 +118,8 @@
       <i class="pi pi-lock empty-lock-icon"></i>
       <p class="empty-message">Login to access all features</p>
     </div>
+
+    
 
     <LoginDialog v-model:visible="showLoginDialog" @login="handleLogin" />
 
@@ -147,6 +156,21 @@ const uexBadgeSrc = computed(() => {
     ? new URL('@/assets/uex-api-badge-powered.png', import.meta.url).href
     : new URL('@/assets/uex-api-badge-powered-clear.png', import.meta.url).href;
 });
+
+// Version del juego (live/ptu) a la que apuntan los datos de UEX Corp
+const gameVersion = ref(null); // { live: '4.9', ptu: '4.10.0' }
+
+async function fetchGameVersion() {
+  try {
+    const res = await fetch('https://api.uexcorp.uk/2.0/game_versions');
+    const json = await res.json();
+    if (json.status === 'ok' && json.data) {
+      gameVersion.value = json.data;
+    }
+  } catch (err) {
+    console.error('No se pudo obtener la version del juego:', err);
+  }
+}
 
 // Auto-show login if session expired due to update
 watch(() => store.sessionExpired, (newVal) => {
@@ -205,6 +229,7 @@ async function openUEX() {
 
 onMounted(() => {
   //notify.alert('Welcome to SC-Courrier-UEX <a href="https://www.youtube.com/shorts/_0roBvhNkBc" target="_blank">Watch the demo</a>', 'Home')
+  fetchGameVersion();
 });
 onUnmounted(() => {
   // Limpieza si es necesario
@@ -333,6 +358,35 @@ onUnmounted(() => {
 .empty-message {
   font-size: 0.9rem;
   color: var(--p-text-muted-color);
+}
+
+/* ── Tag de version del juego ───────────────────────── */
+.game-version-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: flex-start;
+  margin-top: 1rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color);
+  background: var(--p-content-hover-background);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 20px;
+}
+
+.game-version-tag i {
+  color: var(--p-primary-color);
+  font-size: 0.85rem;
+}
+
+.game-version-tag strong {
+  color: var(--p-text-color);
+  font-weight: 600;
+}
+
+.version-sep {
+  opacity: 0.5;
 }
 
 /* ── PanelMenu items ────────────────────────────────── */

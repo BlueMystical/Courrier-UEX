@@ -172,7 +172,7 @@ contextBridge.exposeInMainWorld('api', {
     submitCommodity: (data) => ipcRenderer.invoke('uex:submitCommodity', data),
     submitItem: (data) => ipcRenderer.invoke('uex:submitItem', data),
     getCache: () => ipcRenderer.invoke('uex:getCache'),
-    getNotifications: () => ipcRenderer.invoke('uex:getNotifications'),  // ← agregar
+    getNotifications: () => ipcRenderer.invoke('uex:getNotifications'),
   },
 
   // ── ITEM CACHE ─────────────────────────────────────────────────────────────
@@ -234,4 +234,13 @@ contextBridge.exposeInMainWorld('api', {
      *  @returns {Promise<{success, key}>}  */
     invalidate: (key) => ipcRenderer.invoke('cache:invalidate', key),
   },
+
+  avatar: {
+    /**
+     * Fetches an avatar image from a URL and returns it as a base64-encoded string.
+     * @param {string} url - The URL of the avatar image to fetch.
+     * @returns {Promise<string>} - A promise resolving to the base64-encoded image data.
+     */
+    fetchAsBase64: (url) => ipcRenderer.invoke('avatar:fetchAsBase64', url)
+  }
 })

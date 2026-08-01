@@ -95,15 +95,22 @@ function createWindow(id, route = '/', options = {}) {
 
     // 
     win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+        const responseHeaders = { ...details.responseHeaders }
+
+        // El CDN de avatares no manda CORS headers -> se los inyectamos nosotros
+        if (details.url.includes('cdn.uexcorp.space')) {
+            responseHeaders['Access-Control-Allow-Origin'] = ['*']
+        }
+
         callback({
             responseHeaders: {
-                ...details.responseHeaders,
+                ...responseHeaders,
                 'Content-Security-Policy': [
                     "default-src 'self';" +
                     "img-src 'self' data: https://*.uexcorp.space https://media.robertsspaceindustries.com https://robertsspaceindustries.com;" +
                     "script-src 'self';" +
                     "style-src 'self' 'unsafe-inline';" +
-                    "connect-src 'self' https://api.uexcorp.uk;"
+                    "connect-src 'self' https://api.uexcorp.uk https://cdn.uexcorp.space;"
                 ]
             }
         })

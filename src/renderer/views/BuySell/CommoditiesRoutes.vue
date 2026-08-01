@@ -8,14 +8,13 @@
                 <i class="pi pi-map"></i>
                 <div>
                     <h1>Trade Routes</h1>
-                    <p class="header-sub">Find the most profitable commodities routes</p>
+                    <p class="header-sub">{{ headerSubtitle }}</p>
                 </div>
             </div>
 
             <!-- Global Stats / Data Extract -->
             <div class="header-controls">
-                <div class="data-extract" v-if="dataExtract">
-                    <i class="pi pi-sparkles"></i>
+                <div class="data-extract" v-if="dataExtract">                    
                     <marquee scrollamount="5" class="extract-text">{{ dataExtract }}</marquee>
                 </div>
                 <Button icon="pi pi-list" text rounded severity="secondary" class="extract-expand-btn"
@@ -71,20 +70,44 @@
             </div>
         </template>
     </Select>
-                
+
+<!-- Select de Nave: filtra rutas por capacidad de carga real de la nave elegida -->
+    <Select 
+        v-model="selectedVehicle" 
+        :options="vehicles" 
+        optionLabel="name_full" 
+        optionValue="id"
+        placeholder="Any ship (no cargo limit)..." 
+        showClear 
+        filter 
+        autoFilterFocus
+        filterPlaceholder="Search ship..."
+        class="filter-select" 
+        @change="onFilterChange">
+        <template #option="{ option }">
+            <div class="filter-option">
+                <span class="option-name">{{ option.name_full }}</span>
+                <span class="option-sub">{{ option.scu }} SCU</span>
+            </div>
+        </template>
+    </Select>
+
                 <!-- NUEVO INPUT DE INVERSIÓN -->
                 <InputNumber v-model="maxInvestment" placeholder="Max Investment (aUEC)" 
                     mode="decimal" class="filter-input" :useGrouping="false" clearable />
 
-                <Button label="Search Routes" icon="pi pi-search" :loading="loading" @click="fetchRoutes" 
+                <Button label="Search" icon="pi pi-search" :loading="loading" @click="fetchRoutes" 
                     :disabled="!canSearch" />
             </div>
             </template>
 
             <template #end>
-                <span class="route-count" v-if="hasSearched && !loading">
-                    {{ routes.length }} route{{ routes.length !== 1 ? 's' : '' }} found
-                </span>
+                <SelectButton v-model="sortBy" :options="sortOptions" optionLabel="label" optionValue="value"
+                    class="sort-toggle" :allowEmpty="false" v-if="hasSearched && !loading">
+                    <template #option="{ option }">
+                        <span v-tooltip.top="option.tooltip">{{ option.label }}</span>
+                    </template>
+                </SelectButton>
             </template>
         </Toolbar>
 
@@ -108,14 +131,20 @@
 
             <!-- Routes list -->
             <div v-else-if="routes.length > 0" class="routes-grid">
-                <div v-for="route in routes" :key="route.id" class="route-card"
+                <div v-for="route in sortedRoutes" :key="route.id" class="route-card"
                     :class="{ 'selected': selectedRoute?.id === route.id }" @click="selectRoute(route)">
                     
                     <div class="route-header">
-                        <Tag severity="info" class="commodity-tag">
-                            <i class="pi pi-box mr-1"></i> {{ route.commodity_name }}
-                        </Tag>
-                        <span class="margin-badge">Margin: {{ route.price_margin }}%</span>
+                        <div class="header-tags">
+                            <Tag severity="info" class="commodity-tag">
+                                <i class="pi pi-box mr-1"></i> {{ route.commodity_name }}
+                            </Tag>
+                            <Tag v-if="route.calc.limitedByShip" severity="warn" class="ship-limit-tag"
+                                v-tooltip.top="'The market has more stock than your ship can carry — quantity is capped by your ship\'s cargo grid, not by supply.'">
+                                <i class="pi pi-truck mr-1"></i> Ship-limited
+                            </Tag>
+                        </div>
+                        <span class="margin-badge">ROI: {{ route.calc.roi.toFixed(1) }}%</span>
                     </div>
 
                     <div class="route-path">
@@ -144,19 +173,19 @@
                     <div class="route-financials">
                         <div class="metric">
                             <span class="metric-label">Investment</span>
-                            <span class="metric-value">{{ formatAUEC(route.investment) }} aUEC</span>
+                            <span class="metric-value">{{ formatAUEC(route.calc.investment) }} aUEC</span>
                         </div>
                         <div class="metric profit">
                             <span class="metric-label">Est. Profit</span>
-                            <span class="metric-value text-success">+{{ formatAUEC(route.profit) }} aUEC</span>
+                            <span class="metric-value text-success">+{{ formatAUEC(route.calc.profit) }} aUEC</span>
                         </div>
                         <div class="metric">
                             <span class="metric-label">ROI</span>
-                            <span class="spec-value">{{ Number(route.price_roi).toFixed(1) }}%</span>
+                            <span class="spec-value">{{ route.calc.roi.toFixed(1) }}%</span>
                         </div>
                         <div class="metric">
                             <span class="spec-label">Quantity to Buy</span>
-                            <span class="spec-value">{{ route.scu_origin }} SCU</span>
+                            <span class="spec-value">{{ route.calc.usableScu }} SCU</span>
                         </div>
 
                     </div>
@@ -263,19 +292,19 @@
                         </div>
                         <div class="detail-spec">
                             <span class="spec-label">Total Investment</span>
-                            <span class="spec-value">{{ formatAUEC(selectedRoute.investment) }} aUEC</span>
+                            <span class="spec-value">{{ formatAUEC(selectedRoute.calc.investment) }} aUEC</span>
                         </div>
                         <div class="detail-spec">
                             <span class="spec-label">Total Profit</span>
-                            <span class="spec-value text-success">+{{ formatAUEC(selectedRoute.profit) }} aUEC</span>
+                            <span class="spec-value text-success">+{{ formatAUEC(selectedRoute.calc.profit) }} aUEC</span>
                         </div>
                         <div class="detail-spec">
-                            <span class="spec-label">Max SCU Available</span>
-                            <span class="spec-value">{{ selectedRoute.scu_reachable }} SCU</span>
+                            <span class="spec-label">SCU to Carry {{ selectedRoute.calc.limitedByShip ? '(ship-limited)' : '(market-limited)' }}</span>
+                            <span class="spec-value">{{ selectedRoute.calc.usableScu }} SCU</span>
                         </div>
                         <div class="detail-spec">
-                            <span class="spec-label">Route Score</span>
-                            <span class="spec-value">{{ formatAUEC(selectedRoute.score) }} pts</span>
+                            <span class="spec-label">ROI (own calc)</span>
+                            <span class="spec-value">{{ selectedRoute.calc.roi.toFixed(1) }}%</span>
                         </div>
                     </div>
                 </div>
@@ -342,6 +371,10 @@ import Drawer from 'primevue/drawer'
 import Divider from 'primevue/divider'
 import ScrollPanel from 'primevue/scrollpanel'
 import InputNumber from 'primevue/inputnumber'
+import SelectButton from 'primevue/selectbutton'
+import Tooltip from 'primevue/tooltip'
+// Registro local: en <script setup>, una variable vXxx habilita v-xxx en el template
+const vTooltip = Tooltip
 import { useNotify } from '@/components/Notificaciones/Notify'
 
 const notify = useNotify()
@@ -351,6 +384,7 @@ const API_PLANETS = `${API_BASE}/planets`
 const API_COMMODITIES = `${API_BASE}/commodities`
 const API_ROUTES = `${API_BASE}/commodities_routes`
 const API_EXTRACT = `${API_BASE}/data_extract?data=commodities_routes`
+const API_VEHICLES = `${API_BASE}/vehicles`
 
 // Sistemas habilitados para el filtro de planetas (por ahora, restringido a estos 3)
 const STAR_SYSTEMS = [
@@ -363,11 +397,13 @@ const STAR_SYSTEMS = [
 const planetTree = ref([])
 const expandedKeys = ref({})
 const commodities = ref([])
+const vehicles = ref([])
 const routes = ref([])
 const dataExtract = ref('')
 
 const selectedPlanet = ref(null)
 const selectedCommodity = ref(null)
+const selectedVehicle = ref(null) // id_vehicle elegido, o null = "sin nave / sin límite de carga"
 const selectedRoute = ref(null)
 const maxInvestment = ref(null) 
 
@@ -376,6 +412,13 @@ const error = ref(null)
 const hasSearched = ref(false)
 const showDetailsPanel = ref(false)
 const showExtractPanel = ref(false)
+
+// Criterio de orden de resultados: se aplica en el cliente, sin re-fetch
+const sortBy = ref('profit') // 'profit' | 'roi'
+const sortOptions = [
+    { label: 'Profit', value: 'profit', tooltip: 'Highest total aUEC profit per trip. Best when your cargo capacity is the limiting factor.' },
+    { label: 'ROI', value: 'roi', tooltip: 'Return on investment. Highest profit per aUEC invested. Best when your budget is the limiting factor, since you could repeat the trip or split it across ships.' },
+]
 
 
 // --- COMPUTED ---
@@ -396,10 +439,87 @@ function extractPlanetId(value) {
 
 const selectedPlanetId = computed(() => extractPlanetId(selectedPlanet.value))
 
+// Objeto completo de la nave elegida (o null si "Cualquier nave")
+const selectedVehicleObj = computed(() => {
+    if (!selectedVehicle.value) return null
+    return vehicles.value.find(v => v.id === selectedVehicle.value) || null
+})
+
+// Reordena en el cliente según el criterio elegido, sin volver a pegarle a la API
+const sortedRoutes = computed(() => {
+    return [...routes.value].sort((a, b) => b.calc[sortBy.value] - a.calc[sortBy.value])
+})
+
+// Subtítulo del header: texto genérico por defecto, conteo de resultados tras buscar
+const headerSubtitle = computed(() => {
+    if (loading.value) return 'Calculating trade routes...'
+    if (hasSearched.value) {
+        return `${routes.value.length} route${routes.value.length !== 1 ? 's' : ''} found`
+    }
+    return 'Find the most profitable commodities routes'
+})
+
 // La API requiere al menos un parámetro (id_planet_origin o id_commodity)
 const canSearch = computed(() => {
     return selectedPlanetId.value !== null || selectedCommodity.value !== null || maxInvestment.value !== null
 })
+
+// --- CÁLCULO PROPIO DE ECONOMÍA DE RUTA ---
+// La API tiene un parámetro `investment` opcional, pero no permite limitar por
+// capacidad de carga de una nave puntual, y sus campos `investment`/`profit`/`score`
+// no siempre son confiables (mezclan datos de usuarios, promedios, etc.).
+// Por eso recalculamos todo nosotros a partir de los campos crudos de precio y SCU.
+
+// Convierte "1,2,4,8" -> [1,2,4,8] (ints). Devuelve [] si viene vacío/null.
+function parseContainerSizes(csv) {
+    if (!csv) return []
+    return String(csv)
+        .split(',')
+        .map(s => parseInt(s.trim(), 10))
+        .filter(n => !isNaN(n))
+}
+
+// La nave solo puede operar la ruta si al menos un tamaño de contenedor que carga
+// es aceptado TANTO en origen como en destino. Si a algún lado le falta el dato,
+// le damos el beneficio de la duda (no bloqueamos por falta de info).
+function isContainerCompatible(route, vehicle) {
+    if (!vehicle) return true
+    const shipSizes = parseContainerSizes(vehicle.container_sizes)
+    if (shipSizes.length === 0) return true // nave sin data de contenedores, no filtramos
+
+    const originSizes = parseContainerSizes(route.container_sizes_origin)
+    const destSizes = parseContainerSizes(route.container_sizes_destination)
+
+    const fitsOrigin = originSizes.length === 0 || shipSizes.some(s => originSizes.includes(s))
+    const fitsDest = destSizes.length === 0 || shipSizes.some(s => destSizes.includes(s))
+
+    return fitsOrigin && fitsDest
+}
+
+// Recalcula SCU realmente transportable, inversión, ganancia y ROI para una ruta,
+// dada una nave (o null = sin límite de carga, solo limitado por stock del mercado).
+function computeRouteEconomics(route, vehicle) {
+    const marketScu = Math.max(0, Number(route.scu_reachable) || 0)
+    const shipScu = vehicle ? Math.max(0, Number(vehicle.scu) || 0) : Infinity
+    const usableScu = Math.max(0, Math.min(marketScu, shipScu))
+
+    const priceOrigin = Number(route.price_origin) || 0
+    const priceDestination = Number(route.price_destination) || 0
+
+    const investment = usableScu * priceOrigin
+    const revenue = usableScu * priceDestination
+    const profit = revenue - investment
+    const roi = investment > 0 ? (profit / investment) * 100 : 0
+
+    return {
+        usableScu,
+        investment,
+        profit,
+        roi,
+        limitedByShip: vehicle ? shipScu < marketScu : false,
+        compatible: isContainerCompatible(route, vehicle),
+    }
+}
 
 // Parsea el string plano del ticker (separado por "•") en algo mostrable en el Drawer.
 // Formato esperado por ítem de ruta: "CODE: Origin ▶ Destination = Up to XXM UEC"
@@ -448,7 +568,7 @@ function focusTreeSelectFilter() {
 // --- LIFECYCLE ---
 onMounted(async () => {
     fetchDataExtract()
-    await Promise.all([fetchPlanetTree(), fetchCommodities()])
+    await Promise.all([fetchPlanetTree(), fetchCommodities(), fetchVehicles()])
 })
 
 // --- API CALLS ---
@@ -493,6 +613,19 @@ async function fetchCommodities() {
     }
 }
 
+async function fetchVehicles() {
+    try {
+        const res = await fetch(API_VEHICLES)
+        const json = await res.json()
+        // Solo naves con capacidad de carga real (excluye caza, exploración sin bodega, etc.)
+        vehicles.value = (json.data || [])
+            .filter(v => Number(v.scu) > 0)
+            .sort((a, b) => a.name_full.localeCompare(b.name_full))
+    } catch (e) {
+        console.error('Error fetching vehicles:', e)
+    }
+}
+
 async function fetchDataExtract() {
     try {
         const res = await fetch(API_EXTRACT)
@@ -516,12 +649,11 @@ async function fetchRoutes() {
         const params = new URLSearchParams()
         if (selectedPlanetId.value) params.append('id_planet_origin', selectedPlanetId.value)
         if (selectedCommodity.value) params.append('id_commodity', selectedCommodity.value)
-        
-        // --- NUEVO PARÁMETRO DE INVERSIÓN ---
-        if (maxInvestment.value !== null && maxInvestment.value !== '') {
-            params.append('investment', maxInvestment.value)
-        }
-        // ------------------------------------
+
+        // NOTA: ya no mandamos `investment` a la API. Su cálculo interno no
+        // considera la capacidad de la nave y no es confiable, así que traemos
+        // el set completo (limitado por la propia API a 500 filas) y hacemos
+        // el filtrado/orden por inversión y capacidad de carga nosotros mismos.
 
         const res = `${API_ROUTES}?${params.toString()}`
         const response = await fetch(res)
@@ -530,8 +662,20 @@ async function fetchRoutes() {
         if (json.status === 'error') {
             throw new Error(json.message || 'Error from API')
         }
-        
-        routes.value = (json.data || []).sort((a, b) => b.profit - a.profit)
+
+        const vehicle = selectedVehicleObj.value
+        const maxInv = (maxInvestment.value !== null && maxInvestment.value !== '') ? Number(maxInvestment.value) : null
+
+        const enriched = (json.data || [])
+            .map(route => ({ ...route, calc: computeRouteEconomics(route, vehicle) }))
+            // Sin SCU útil (mercado vacío o nave sin la bodega mínima) no sirve
+            .filter(route => route.calc.usableScu > 0)
+            // Compatibilidad de tamaño de contenedor con la nave elegida
+            .filter(route => route.calc.compatible)
+            // Presupuesto máximo, calculado con NUESTRA inversión real, no la de la API
+            .filter(route => maxInv === null || route.calc.investment <= maxInv)
+
+        routes.value = enriched
         
     } catch (e) {
         error.value = 'Failed to load routes. ' + e.message
@@ -560,6 +704,7 @@ function selectRoute(route) {
 function clearFilters() {
     selectedPlanet.value = null
     selectedCommodity.value = null
+    selectedVehicle.value = null
     maxInvestment.value = null // <--- RESETEAR AQUÍ
     routes.value = []
     hasSearched.value = false
@@ -757,7 +902,7 @@ function formatCurrency(value) {
 
 .filter-group {
     display: grid;
-    grid-template-columns: minmax(180px, 1.4fr) minmax(180px, 1.4fr) 160px auto;
+    grid-template-columns: minmax(160px, 1.1fr) minmax(160px, 1.1fr) minmax(160px, 1.1fr) 150px auto;
     align-items: center;
     gap: 0.75rem;
     /* Si en pantallas angostas ni así entra, se scrollea en vez de romper el layout */
@@ -791,12 +936,18 @@ function formatCurrency(value) {
     white-space: nowrap;
 }
 
-.route-count {
-    font-size: 0.85rem;
-    color: var(--p-text-muted-color);
-    white-space: nowrap;
-    flex-shrink: 0;
+.search-toolbar :deep(.p-toolbar-end) {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
 }
+
+.sort-toggle :deep(.p-togglebutton) {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+}
+
+
 
 .filter-option {
     display: flex;
@@ -894,6 +1045,12 @@ function formatCurrency(value) {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+.header-tags {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
 .margin-badge {

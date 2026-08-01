@@ -7,6 +7,7 @@ import NotFound from './views/NotFound.vue'
 const routes = [
   { path: '/', component: HomeView, meta: { title: 'Home' } },
   { path: '/settings', component: SettingsView, meta: { title: 'Settings', hideMenubar: true } },
+  // ---------------------------------------  
   {
     path: '/buysell/comodities', name: 'Commodities',
     component: () => import('./views/BuySell/Commodities.vue'),
@@ -27,8 +28,10 @@ const routes = [
     component: () => import('./views/BuySell/CommoditiesRoutes.vue'),
     meta: { title: 'Trade Routes' }
   },
-  // ---------------------------------------
   { path: '/buysell/marketplace', component: () => import('@/views/BuySell/Marketplace.vue') },
+  // ---------------------------------------
+  { path: '/utilities/hauling', component: () => import('@/views/Hauling/CargoMissionPlanner.vue') },
+  // ---------------------------------------  
   {
     path: '/datarunner-capture',    name: 'DatarunnerCaptures',
     component: () => import('./views/Datarunner/DatarunnerCaptures.vue'),
@@ -43,7 +46,7 @@ const routes = [
     path: '/uex-notifications', name: 'UexNotifications', component: () => import('./views/UexNotifications.vue'),
     meta: { title: 'UEX Notifications' }
   },
-  
+    // ---------------------------------------  
   // otras rutas aquí
   {
     path: '/:pathMatch(.*)*',

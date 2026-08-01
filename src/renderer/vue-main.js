@@ -127,7 +127,7 @@ async function syncItemsFromRenderer(store) {
         const res = await fetch(`${BASE}/items?id_category=${cat.id}`)
         const data = await res.json()
         if (data.status === 'ok') allItems.push(...(data.data || []))
-        console.log(`[ItemCache]  ✓ [${i + 1}/${categories.length}] ${cat.name}: ${data.data?.length ?? 0} items`)
+        //console.log(`[ItemCache]  ✓ [${i + 1}/${categories.length}] ${cat.name}: ${data.data?.length ?? 0} items`)
       } catch (e) {
         console.warn(`[ItemCache] ⚠️  Category ${cat.id} (${cat.name}) failed: ${e.message}`)
       }

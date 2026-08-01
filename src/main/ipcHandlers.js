@@ -2,7 +2,7 @@
 
 // src/main/ipcHandlers.js
 
-const { app, ipcMain, dialog, BrowserWindow, shell } = require('electron')
+const { app, ipcMain, net, dialog, BrowserWindow, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -78,7 +78,7 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
 
     // Renderer delivers fetched items catalogue → store in cache
     ipcMain.handle('uex:cacheItems', async (_, { categories, items, vehicles }) => {
-        itemCacheService.receiveSyncData({ categories, items, vehicles  })
+        itemCacheService.receiveSyncData({ categories, items, vehicles })
         return true
     })
 
@@ -227,6 +227,23 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
 
     ipcMain.handle('uex:getNotifications', async () => {
         return await uexService.getUserNotifications()
+    })
+
+    ipcMain.handle('avatar:fetchAsBase64', async (event, url) => {
+        return new Promise((resolve) => {
+            const request = net.request(url)
+            const chunks = []
+            request.on('response', (response) => {
+                response.on('data', (chunk) => chunks.push(chunk))
+                response.on('end', () => {
+                    const buffer = Buffer.concat(chunks)
+                    const mimeType = response.headers['content-type'] || 'image/jpeg'
+                    resolve(`data:${mimeType};base64,${buffer.toString('base64')}`)
+                })
+            })
+            request.on('error', () => resolve(null))
+            request.end()
+        })
     })
 }
 

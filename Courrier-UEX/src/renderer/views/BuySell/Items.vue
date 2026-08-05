@@ -521,7 +521,7 @@ onMounted(async () => {
 
 // Al elegir una categoría, se traen sus items en vivo (no se asume que el cache
 // local tenga id_category) y se resetea la selección/precios actuales.
-watch(selectedCategoryId, async (newVal) => {
+watch (selectedCategoryId, async (newVal) => {
     selectedItem.value = null;
     prices.value = [];
     categoryItems.value = [];
@@ -583,11 +583,13 @@ const searchItem = (event) => {
 const selectItem = async (item) => {
     if (!item) return;
     selectedItem.value = item;
-    prices.value = [];
     itemAttributes.value = [];
+    prices.value = [];
+    
     filterMode.value = 'all';
     selectedSystem.value = null;
     loadingAttributes.value = true;
+
     try {
         const [pricesRes, attrsRes] = await Promise.all([
             fetch(`${API_ITEM_PRICES}${item.id}`),

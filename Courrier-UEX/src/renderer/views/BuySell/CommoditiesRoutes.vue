@@ -150,44 +150,51 @@
                     <div class="route-path">
                         <!-- Origin -->
                         <div class="path-node origin">
-                            <div class="node-system">{{ route.origin_planet_name }}</div>
+                            <div class="node-system" :title="formatLocation(route, 'origin')">{{ truncateText(formatLocation(route, 'origin'), 24) }}</div>
                             <div class="node-terminal" :title="route.origin_terminal_name">{{ route.origin_terminal_name }}</div>
-                            <div class="node-price">Buy: <strong>{{ formatAUEC(route.price_origin) }}</strong></div>
+                            <div class="node-price">Buy Price: <strong>{{ formatAUEC(route.price_origin) }} aUEC</strong></div>
                         </div>
 
                         <!-- Arrow -->
                         <div class="path-arrow">
                             <i class="pi pi-arrow-right"></i>
-                            <span class="distance" v-if="route.distance > 0">{{ route.distance }} km</span>
+                            <span class="distance" v-if="route.distance > 0">{{ formatDistance(route.distance) }} GM</span>
                         </div>
 
                         <!-- Destination -->
                         <div class="path-node destination">
-                            <div class="node-system">{{ route.destination_planet_name }}</div>
+                            <div class="node-system" :title="formatLocation(route, 'destination')">{{ truncateText(formatLocation(route, 'destination'), 24) }}</div>
                             <div class="node-terminal" :title="route.destination_terminal_name">{{ route.destination_terminal_name }}</div>
-                            <div class="node-price">Sell: <strong>{{ formatAUEC(route.price_destination) }}</strong></div>
+                            <div class="node-price">Sell Price: <strong>{{ formatAUEC(route.price_destination) }} aUEC</strong></div>
                         </div>
                     </div>
 
                     <!-- Financials -->
                     <div class="route-financials">
+                        <!-- Fila 1 -->
                         <div class="metric">
                             <span class="metric-label">Investment</span>
                             <span class="metric-value">{{ formatAUEC(route.calc.investment) }} aUEC</span>
                         </div>
+                        <div class="metric">
+                            <span class="metric-label">Selling</span>
+                            <span class="metric-value">{{ formatAUEC(route.calc.selling) }} aUEC</span>
+                        </div>
                         <div class="metric profit">
-                            <span class="metric-label">Est. Profit</span>
+                            <span class="metric-label">Profit</span>
                             <span class="metric-value text-success">+{{ formatAUEC(route.calc.profit) }} aUEC</span>
                         </div>
+
+                        <!-- Fila 2 -->
+                        <div class="metric">
+                            <span class="metric-label">Quantity Buy</span>
+                            <span class="metric-value">{{ route.calc.usableScu }} SCU</span>
+                        </div>
+                        <div class="metric metric-empty"></div>
                         <div class="metric">
                             <span class="metric-label">ROI</span>
-                            <span class="spec-value">{{ route.calc.roi.toFixed(1) }}%</span>
+                            <span class="metric-value">{{ route.calc.roi.toFixed(1) }}%</span>
                         </div>
-                        <div class="metric">
-                            <span class="spec-label">Quantity to Buy</span>
-                            <span class="spec-value">{{ route.calc.usableScu }} SCU</span>
-                        </div>
-
                     </div>
                 </div>
             </div>
@@ -293,6 +300,10 @@
                         <div class="detail-spec">
                             <span class="spec-label">Total Investment</span>
                             <span class="spec-value">{{ formatAUEC(selectedRoute.calc.investment) }} aUEC</span>
+                        </div>
+                        <div class="detail-spec">
+                            <span class="spec-label">Total Selling</span>
+                            <span class="spec-value">{{ formatAUEC(selectedRoute.calc.selling) }} aUEC</span>
                         </div>
                         <div class="detail-spec">
                             <span class="spec-label">Total Profit</span>
@@ -514,6 +525,7 @@ function computeRouteEconomics(route, vehicle) {
     return {
         usableScu,
         investment,
+        selling: revenue,
         profit,
         roi,
         limitedByShip: vehicle ? shipScu < marketScu : false,
@@ -708,6 +720,28 @@ function clearFilters() {
     maxInvestment.value = null // <--- RESETEAR AQUÍ
     routes.value = []
     hasSearched.value = false
+}
+
+// El orbit_name de la API ya identifica el cuerpo real (planeta o luna),
+// así que alcanza con combinarlo con el sistema estelar.
+function formatLocation(route, side) {
+    const system = route[`${side}_star_system_name`]
+    const orbit = route[`${side}_orbit_name`]
+    return [system, orbit].filter(Boolean).join(' / ')
+}
+
+// La API expresa la distancia en Giga Metros (GM), no en km.
+function formatDistance(value) {
+    if (value === undefined || value === null) return '0'
+    const num = Number(value)
+    return Number.isInteger(num) ? num.toString() : num.toFixed(2)
+}
+
+// Corta un texto a `max` caracteres agregando "…"; el texto completo se
+// muestra vía tooltip (atributo title) donde se usa esta función.
+function truncateText(text, max) {
+    if (!text) return ''
+    return text.length > max ? text.slice(0, max).trimEnd() + '…' : text
 }
 
 function formatAUEC(value) {
@@ -1068,8 +1102,9 @@ function formatCurrency(value) {
     align-items: stretch;
     justify-content: space-between;
     background: var(--p-surface-100);
+    border: 1px solid var(--p-content-border-color);
     border-radius: 8px;
-    padding: 0.75rem;
+    padding: 0.75rem 1rem;
 }
 
 :global(.app-dark) .route-path {
@@ -1095,6 +1130,9 @@ function formatCurrency(value) {
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: var(--p-text-muted-color);
 }
 
@@ -1131,15 +1169,39 @@ function formatCurrency(value) {
 .route-financials {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 0.5rem;
-    border-top: 1px solid var(--p-content-border-color);
-    padding-top: 0.75rem;
+    grid-template-rows: auto auto;
+    border: 1px solid var(--p-content-border-color);
+    border-radius: 8px;
+    overflow: hidden;
 }
 
 .metric {
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
     gap: 0.15rem;
+    padding: 0.55rem 0.5rem;
+    text-align: center;
+    border-right: 1px solid var(--p-content-border-color);
+    border-bottom: 1px solid var(--p-content-border-color);
+}
+
+/* Sin borde derecho en la última columna, sin borde inferior en la última fila */
+.metric:nth-child(3n) {
+    border-right: none;
+}
+
+.metric:nth-child(n+4) {
+    border-bottom: none;
+}
+
+.metric-empty {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+:deep(.app-dark) .metric-empty {
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .metric.profit .metric-value {
@@ -1151,9 +1213,10 @@ function formatCurrency(value) {
 }
 
 .metric-label {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     color: var(--p-text-muted-color);
     text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 .metric-value {

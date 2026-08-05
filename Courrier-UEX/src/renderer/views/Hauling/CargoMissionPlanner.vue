@@ -361,6 +361,7 @@ const drawerVisible = ref(false)
 const editingIndex = ref(null)
 
 const STORAGE_KEY = 'cargo-planner-flight-config'
+const API_BASE = 'https://api.uexcorp.uk/2.0';
 
 const saveFlightConfig = () => {
   const config = {
@@ -539,18 +540,18 @@ const openEditMissionDialog = (index) => {
   } else if (m.type === 'multidrop' && m.cargoItems.length > 0) {
     editData.masterPickupLocationId = m.cargoItems[0].pickupLocationId
     editData.dropLegs = m.cargoItems.map(item => ({
-      deliveryLocationId: item.deliveryLocationId,
-      commodityId: item.commodityId,
-      scu: item.scu,
+      deliveryLocationId:   item.deliveryLocationId,
+      commodityId:          item.commodityId,
+      scu:                  item.scu,
       legId: item.legId || newLegId()
     }))
   } else if (m.type === 'multipickup' && m.cargoItems.length > 0) {
     editData.masterDeliveryLocationId = m.cargoItems[0].deliveryLocationId
     editData.pickupLegs = m.cargoItems.map(item => ({
-      pickupLocationId: item.pickupLocationId,
-      commodityId: item.commodityId,
-      scu: item.scu,
-      legId: item.legId || newLegId()
+      pickupLocationId:   item.pickupLocationId,
+      commodityId:        item.commodityId,
+      scu:                item.scu,
+      legId:              item.legId || newLegId()
     }))
   }
   currentMission.value = editData
@@ -566,27 +567,27 @@ const saveMission = () => {
   let cargoItems = []
   if (currentMission.value.type === 'simple') {
     cargoItems.push({
-      pickupLocationId: currentMission.value.pickupLocationId,
+      pickupLocationId:   currentMission.value.pickupLocationId,
       deliveryLocationId: currentMission.value.deliveryLocationId,
-      commodityId: currentMission.value.commodityId,
-      scu: currentMission.value.scu,
-      legId: 'simple-0'
+      commodityId:        currentMission.value.commodityId,
+      scu:                currentMission.value.scu,
+      legId:              'simple-0'
     })
   } else if (currentMission.value.type === 'multidrop') {
     cargoItems = currentMission.value.dropLegs.map(leg => ({
-      pickupLocationId: currentMission.value.masterPickupLocationId,
+      pickupLocationId:   currentMission.value.masterPickupLocationId,
       deliveryLocationId: leg.deliveryLocationId,
-      commodityId: leg.commodityId,
-      scu: leg.scu,
-      legId: leg.legId || newLegId()
+      commodityId:        leg.commodityId,
+      scu:                leg.scu,
+      legId:              leg.legId || newLegId()
     }))
   } else if (currentMission.value.type === 'multipickup') {
     cargoItems = currentMission.value.pickupLegs.map(leg => ({
-      pickupLocationId: leg.pickupLocationId,
+      pickupLocationId:   leg.pickupLocationId,
       deliveryLocationId: currentMission.value.masterDeliveryLocationId,
-      commodityId: leg.commodityId,
-      scu: leg.scu,
-      legId: leg.legId || newLegId()
+      commodityId:        leg.commodityId,
+      scu:                leg.scu,
+      legId:              leg.legId || newLegId()
     }))
   }
   const oldCargoItems = editingIndex.value !== null ? missions.value[editingIndex.value].cargoItems : null
@@ -619,7 +620,7 @@ const saveMission = () => {
 
 const fetchStarSystems = async () => {
   try {
-    const res = await fetch('https://api.uexcorp.uk/2.0/star_systems')
+    const res = await fetch(`${API_BASE}/star_systems`)
     const json = await res.json()
     if (json.status === 'ok') starSystems.value = json.data.filter(s => s.is_available_live === 1)
   } catch (e) { console.error('Error fetching star systems', e) }
@@ -627,7 +628,7 @@ const fetchStarSystems = async () => {
 
 const fetchCommodities = async () => {
   try {
-    const res = await fetch('https://api.uexcorp.uk/2.0/commodities')
+    const res = await fetch(`${API_BASE}/commodities`)
     const json = await res.json()
     if (json.status === 'ok') commodities.value = json.data.filter(c => c.is_available_live === 1)
   } catch (e) { console.error('Error fetching commodities', e) }
@@ -640,7 +641,7 @@ const fetchShips = async () => {
     { name: 'Hull A', capacity: 64 }, { name: 'Railen', capacity: 320 }
   ]
   try {
-    const res = await fetch('https://api.uexcorp.uk/2.0/vehicles')
+    const res = await fetch(`${API_BASE}/vehicles`)
     const json = await res.json()
     if (json.status === 'ok') {
       ships.value = json.data.map(v => ({ name: v.name, capacity: v.scu || 0 })).sort((a, b) => a.name.localeCompare(b.name))
@@ -655,17 +656,17 @@ const fetchShips = async () => {
 const loadSystemData = async (systemId) => {
   try {
     const [planetsRes, moonsRes, stationsRes, citiesRes, distancesRes] = await Promise.all([
-      fetch(`https://api.uexcorp.uk/2.0/planets?id_star_system=${systemId}`).then(r => r.json()),
-      fetch(`https://api.uexcorp.uk/2.0/moons?id_star_system=${systemId}`).then(r => r.json()),
-      fetch(`https://api.uexcorp.uk/2.0/space_stations?id_star_system=${systemId}`).then(r => r.json()),
-      fetch(`https://api.uexcorp.uk/2.0/cities?id_star_system=${systemId}`).then(r => r.json()),
-      fetch(`https://api.uexcorp.uk/2.0/orbits_distances?id_star_system=${systemId}`).then(r => r.json())
-    ])
+      fetch(`${API_BASE}/planets?id_star_system=${systemId}`).then(r => r.json()),
+      fetch(`${API_BASE}/moons?id_star_system=${systemId}`).then(r => r.json()),
+      fetch(`${API_BASE}/space_stations?id_star_system=${systemId}`).then(r => r.json()),
+      fetch(`${API_BASE}/cities?id_star_system=${systemId}`).then(r => r.json()),
+      fetch(`${API_BASE}/orbits_distances?id_star_system=${systemId}`).then(r => r.json())
+    ]);
     let combinedLocations = []
-    if (planetsRes.status === 'ok') combinedLocations.push(...planetsRes.data.map(p => ({ ...p, uniqueId: `planet_${p.id}`, type: 'Planet', routeId: p.id_orbit || p.id })))
-    if (moonsRes.status === 'ok') combinedLocations.push(...moonsRes.data.map(m => ({ ...m, uniqueId: `moon_${m.id}`, type: 'Moon', routeId: m.id_orbit || m.id })))
-    if (stationsRes.status === 'ok') combinedLocations.push(...stationsRes.data.map(s => ({ ...s, uniqueId: `station_${s.id}`, type: 'Station', routeId: s.id_orbit || s.id })))
-    if (citiesRes.status === 'ok') combinedLocations.push(...citiesRes.data.map(c => ({ ...c, uniqueId: `city_${c.id}`, type: 'City', routeId: c.id_orbit || c.id })))
+    if (planetsRes.status === 'ok')   combinedLocations.push(...planetsRes.data.map(p => ({ ...p, uniqueId: `planet_${p.id}`, type: 'Planet', routeId: p.id_orbit || p.id })))
+    if (moonsRes.status === 'ok')     combinedLocations.push(...moonsRes.data.map(m => ({ ...m, uniqueId: `moon_${m.id}`, type: 'Moon', routeId: m.id_orbit || m.id })))
+    if (stationsRes.status === 'ok')  combinedLocations.push(...stationsRes.data.map(s => ({ ...s, uniqueId: `station_${s.id}`, type: 'Station', routeId: s.id_orbit || s.id })))
+    if (citiesRes.status === 'ok')    combinedLocations.push(...citiesRes.data.map(c => ({ ...c, uniqueId: `city_${c.id}`, type: 'City', routeId: c.id_orbit || c.id })))
     locations.value = combinedLocations
       .filter(l => l.is_available_live === 1)
       .map(l => ({ 
@@ -721,12 +722,12 @@ const routeResult = computed(() => {
   missions.value.forEach((m, mIdx) => {
     m.cargoItems.forEach((item, iIdx) => {
       pendingPickups.push({
-        missionIndex: mIdx,
-        itemIndex: iIdx,
-        locationId: item.pickupLocationId,
+        missionIndex:       mIdx,
+        itemIndex:          iIdx,
+        locationId:         item.pickupLocationId,
         deliveryLocationId: item.deliveryLocationId,
-        scu: item.scu,
-        commodity: getCommodityName(item.commodityId)
+        scu:                item.scu,
+        commodity:          getCommodityName(item.commodityId)
       })
     })
   })
@@ -771,7 +772,6 @@ for (const opt of validOptions) {
       let cost = getDistance(currentRouteId, targetLoc.routeId)
       
       // --- 1. PENALIZACIÓN ATMOSFÉRICA ---
-      // Ajusta los nombres de los 'types' según como los devuelva exactamente la API de UEXCorp
       if (targetLoc.type === 'City' || targetLoc.type === 'Planet') {
         cost += 100000; // Penalización alta para obligar a consolidar viajes a la superficie
       } else if (targetLoc.type === 'Outpost') {
@@ -825,22 +825,22 @@ for (const opt of validOptions) {
       if (currentSCU > maxSCU) maxSCU = currentSCU
       
       steps.push({
-        locationName: bestLoc.name,
+        locationName:     bestLoc.name,
         actionDescription: `Pick up ${bestOption.item.scu} SCU of ${bestOption.item.commodity}`,
-        type: 'pickup',
-        scuChange: `+${bestOption.item.scu}`,
-        currentVolume: currentSCU,
-        distance: legDistance,
-        missionIndex: bestOption.item.missionIndex,
-        itemIndex: bestOption.item.itemIndex
+        type:             'pickup',
+        scuChange:        `+${bestOption.item.scu}`,
+        currentVolume:    currentSCU,
+        distance:         legDistance,
+        missionIndex:     bestOption.item.missionIndex,
+        itemIndex:        bestOption.item.itemIndex
       })
       
       pendingDeliveries.push({
-        locationId: bestOption.item.deliveryLocationId,
-        scu: bestOption.item.scu,
-        commodity: bestOption.item.commodity,
+        locationId:   bestOption.item.deliveryLocationId,
+        scu:          bestOption.item.scu,
+        commodity:    bestOption.item.commodity,
         missionIndex: bestOption.item.missionIndex,
-        itemIndex: bestOption.item.itemIndex
+        itemIndex:    bestOption.item.itemIndex
       })
       
       pendingPickups = pendingPickups.filter(p => p !== bestOption.item)
@@ -849,14 +849,14 @@ for (const opt of validOptions) {
       currentSCU -= bestOption.item.scu
       
       steps.push({
-        locationName: bestLoc.name,
-        actionDescription: `Deliver ${bestOption.item.scu} SCU of ${bestOption.item.commodity}`,
-        type: 'delivery',
-        scuChange: `-${bestOption.item.scu}`,
-        currentVolume: currentSCU,
-        distance: legDistance,
-        missionIndex: bestOption.item.missionIndex,
-        itemIndex: bestOption.item.itemIndex
+        locationName:       bestLoc.name,
+        actionDescription:  `Deliver ${bestOption.item.scu} SCU of ${bestOption.item.commodity}`,
+        type:               'delivery',
+        scuChange:          `-${bestOption.item.scu}`,
+        currentVolume:      currentSCU,
+        distance:           legDistance,
+        missionIndex:       bestOption.item.missionIndex,
+        itemIndex:          bestOption.item.itemIndex
       })
       
       pendingDeliveries = pendingDeliveries.filter(d => d !== bestOption.item)

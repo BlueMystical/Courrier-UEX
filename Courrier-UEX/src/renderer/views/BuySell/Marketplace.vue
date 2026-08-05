@@ -16,6 +16,8 @@
                 <div class="op-toggle">
                     <button v-for="op in operations" :key="op.value" class="op-btn"
                         :class="{ active: activeOperation === op.value, [op.cls]: true }"
+                        :disabled="op.value === 'all' && !!selectedItemId"
+                        :title="op.value === 'all' && !!selectedItemId ? 'Select Buy or Sell when filtering by a specific item' : ''"
                         @click="setOperation(op.value)">
                         <i :class="op.icon"></i>
                         {{ op.label }}
@@ -28,23 +30,17 @@
             </div>
         </div>
 
-        <!-- Search + filters -->
+        <!-- Search: filter/browse items & commodities via a category tree -->
         <div class="search-bar">
-            <IconField>
-                <InputIcon class="pi pi-search" />
-                <InputText v-model="searchQuery" placeholder="Search listings..." class="search-input" />
-            </IconField>
-
-            <Select v-model="selectedType" :options="typeOptions" optionLabel="label" optionValue="value"
-                placeholder="All types" showClear class="type-select" @show="onSelectShow" />
-
-            <Select v-model="selectedAvailability" :options="availabilityOptions" optionLabel="label"
-                optionValue="value" placeholder="Any availability" showClear class="avail-select"
-                @show="onSelectShow" />
+            <TreeSelect v-model="treeSelection" v-model:expandedKeys="expandedKeys" :options="treeOptions" filter
+                :filterDelay="400" filterPlaceholder="Search items & commodities..." showClear scrollHeight="340px"
+                :disabled="cacheStatus !== 'ready'" :placeholder="searchPlaceholder" class="tree-select"
+                @show="focusTreeFilter" @hide="onTreeHide" />
 
             <Button v-if="hasActiveFilters" icon="pi pi-times" label="Clear" severity="secondary" text size="small"
                 @click="clearFilters" />
         </div>
+
 
         <!-- Scrollable content area (only this part scrolls) -->
         <ScrollPanel class="content-scroll">
@@ -263,12 +259,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
-import InputText from 'primevue/inputtext'
-import IconField from 'primevue/iconfield'
-import InputIcon from 'primevue/inputicon'
+import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import TreeSelect from 'primevue/treeselect'
 import Button from 'primevue/button'
-import Select from 'primevue/select'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import Drawer from 'primevue/drawer'
@@ -286,14 +279,23 @@ const MARKET_DETAIL_URL = 'https://uexcorp.space/marketplace/item/info/'  // ?id
 const listings = ref([])
 const loading = ref(false)
 const error = ref(null)
-const searchQuery = ref('')
 const activeOperation = ref('all')   // 'all' | 'sell' | 'buy'
-const selectedType = ref(null)
-const selectedAvailability = ref(null)
 const selectedListing = ref(null)
 const showDrawer = ref(false)
 const marketAvg = ref(null)
 const loadingAvg = ref(false)
+
+// Local item/commodity cache (same cache Items.vue uses), browsed/filtered
+// via the category tree below.
+const cacheItems = shallowRef([])
+const cacheStatus = ref('loading')   // 'loading' | 'ready' | 'error'
+const isSyncing = ref(false)
+const syncProgress = ref(null)
+
+const treeSelection = ref(null)   // selected leaf key (item id as string), or null
+const expandedKeys = ref({})      // vacío = todo colapsado por defecto
+let filterInputEl = null          // referencia al input del overlay
+let expandDebounceTimer = null    // ← NUEVO: timer para debounce
 
 const operations = [
     { value: 'all', label: 'All', icon: 'pi pi-list', cls: 'all' },
@@ -301,65 +303,185 @@ const operations = [
     { value: 'buy', label: 'Buy', icon: 'pi pi-cart-plus', cls: 'buy' },
 ]
 
-const typeOptions = [
-    { label: 'Item', value: 'item' },
-    { label: 'Vehicle', value: 'vehicle' },
-    { label: 'Commodity', value: 'commodity' },
-]
-
-const availabilityOptions = [
-    { label: 'Ready for pickup', value: 'ready_pickup' },
-    { label: 'Digital delivery', value: 'digital' },
-    { label: 'On order', value: 'on_order' },
-]
-
 // ── COMPUTED ──
 const filteredListings = computed(() => {
-    let list = listings.value
+    if (activeOperation.value === 'all') return listings.value
+    return listings.value.filter(l => l.operation === activeOperation.value)
+})
 
-    if (activeOperation.value !== 'all') {
-        list = list.filter(l => l.operation === activeOperation.value)
+const selectedItemId = computed(() => {
+    if (!treeSelection.value || Object.keys(treeSelection.value).length === 0) {
+        return null
     }
+    // Extraemos la clave del nodo seleccionado
+    return Object.keys(treeSelection.value)[0]
+})
 
-    if (selectedType.value) {
-        list = list.filter(l => l.type === selectedType.value)
+const selectedItemName = computed(() => {
+    if (!treeSelection.value) return ''
+    for (const group of treeOptions.value) {
+        const found = group.children.find(i => i.key === treeSelection.value)
+        if (found) return found.label
     }
-
-    if (selectedAvailability.value) {
-        list = list.filter(l => l.availability === selectedAvailability.value)
-    }
-
-    if (searchQuery.value.trim()) {
-        const q = searchQuery.value.toLowerCase()
-        list = list.filter(l =>
-            l.title?.toLowerCase().includes(q) ||
-            l.description?.toLowerCase().includes(q) ||
-            l.location?.toLowerCase().includes(q) ||
-            l.user_username?.toLowerCase().includes(q)
-        )
-    }
-
-    return list
+    return ''
 })
 
 const hasActiveFilters = computed(() =>
-    searchQuery.value.trim() ||
-    selectedType.value ||
-    selectedAvailability.value ||
+    !!selectedItemId.value ||
     activeOperation.value !== 'all'
 )
 
+// Category -> Item tree built from the local cache — no extra API calls.
+// Category nodes are unselectable; only leaf items can be chosen.
+const treeOptions = computed(() => {
+    const groups = {}
+    for (const item of cacheItems.value) {
+        if (item.id_category == null) continue
+        const catId = item.id_category
+        if (!groups[catId]) {
+            groups[catId] = {
+                key: `cat-${catId}`,
+                label: item.category || item.section || 'Other',
+                selectable: false,
+                children: [],
+            }
+        }
+        groups[catId].children.push({ key: String(item.id), label: item.name })
+    }
+    return Object.values(groups)
+        .map(g => ({ ...g, children: [...g.children].sort((a, b) => a.label.localeCompare(b.label)) }))
+        .sort((a, b) => a.label.localeCompare(b.label))
+})
+
+const searchPlaceholder = computed(() => {
+    if (cacheStatus.value === 'loading') return 'Loading item cache...'
+    if (cacheStatus.value === 'error') return 'Cache unavailable — try restarting'
+    return `Browse ${cacheItems.value.length.toLocaleString()} items & commodities...`
+})
+
+const resultsLimitNote = computed(() => {
+    if (selectedItemId.value) {
+        const op = activeOperation.value === 'buy' ? 'buy' : 'sell'
+        return `Showing up to 1,000 ${op} results for ${selectedItemName.value || 'the selected item'}.`
+    }
+    return 'Showing up to 100 results. Search or browse by category above for the full result set.'
+})
+
+// ── HELPERS para expandir solo al filtrar ──
+function getMatchingParentKeys(filterText) {
+    // Si el texto es muy corto, no expandimos nada para evitar sobrecarga del DOM
+    if (!filterText || filterText.length < 3) return {} 
+    
+    const text = filterText.toLowerCase()
+    const keys = {}
+    for (const group of treeOptions.value) {
+        const hasMatch = group.children?.some(child =>
+            child.label.toLowerCase().includes(text)
+        )
+        if (hasMatch) {
+            keys[group.key] = true
+        }
+    }
+    return keys
+}
+
+function applyExpandedKeys(filterText) {
+    expandedKeys.value = getMatchingParentKeys(filterText)
+}
+
+function onFilterInput(e) {
+    const text = e.target.value?.trim() || ''
+    clearTimeout(expandDebounceTimer)
+    
+    if (!text) {
+        expandedKeys.value = {}
+        return
+    }
+    
+    // Subimos de 150ms a 350ms
+    expandDebounceTimer = setTimeout(() => {
+        applyExpandedKeys(text)
+    }, 350)
+}
+
 // ── LIFECYCLE ──
-onMounted(fetchListings)
+onMounted(async () => {
+    fetchListings()
+
+    try {
+        const items = await window.api.Items.getAll()
+        if (Array.isArray(items) && items.length > 0) {
+            cacheItems.value = items
+            cacheStatus.value = 'ready'
+        }
+        // Empty isn't necessarily an error — the background sync may still be running.
+    } catch (e) {
+        cacheStatus.value = 'error'
+        console.error('[Marketplace] Failed to load item cache:', e)
+    }
+
+    // Same sync listeners Items.vue uses (see preload.js -> window.api.Items).
+    window.api.Items.onSyncStart(() => {
+        isSyncing.value = true
+        if (!cacheItems.value.length) cacheStatus.value = 'loading'
+    })
+
+    window.api.Items.onProgress((data) => {
+        syncProgress.value = data
+    })
+
+    window.api.Items.onSyncComplete(async () => {
+        isSyncing.value = false
+        syncProgress.value = null
+        try {
+            const items = await window.api.Items.getAll()
+            if (Array.isArray(items) && items.length > 0) {
+                cacheItems.value = items
+                cacheStatus.value = 'ready'
+            }
+        } catch (e) {
+            // silent: the next sync-complete will resolve it
+        }
+    })
+
+    window.api.Items.onSyncError(() => {
+        isSyncing.value = false
+        if (!cacheItems.value.length) cacheStatus.value = 'error'
+    })
+})
+
+onUnmounted(() => {
+    clearTimeout(expandDebounceTimer)
+    window.api.Items.offAll()
+})
 
 // ── API ──
+async function fetchListingsPage(params = {}) {
+    const url = new URL(API_LISTINGS)
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            url.searchParams.set(key, value)
+        }
+    })
+    const res = await fetch(url.toString())
+    const json = await res.json()
+    return json.data || []
+}
+
 async function fetchListings() {
     loading.value = true
     error.value = null
     try {
-        const res = await fetch(API_LISTINGS)
-        const json = await res.json()
-        listings.value = json.data || []
+        if (selectedItemId.value) {
+            // operation is forced to buy|sell (never 'all') when an item is selected,
+            // which is what unlocks the API's 1,000 row limit
+            listings.value = await fetchListingsPage({
+                id_item: selectedItemId.value,
+                operation: activeOperation.value === 'all' ? 'sell' : activeOperation.value,
+            })
+        } else {
+            listings.value = await fetchListingsPage()
+        }
     } catch (e) {
         error.value = 'Failed to load marketplace. Please check your connection.'
         console.error(e)
@@ -383,9 +505,44 @@ async function fetchMarketAvg(idItem) {
     }
 }
 
+// ── WATCHERS ──
+watch(selectedItemId, (idItem) => {
+    // 'All' isn't valid combined with a specific item — default to Sell
+    if (idItem && activeOperation.value === 'all') {
+        activeOperation.value = 'sell'
+    }
+    fetchListings()
+})
+
 // ── HANDLERS ──
 function setOperation(op) {
+    if (op === 'all' && selectedItemId.value) return // disabled in this state, ignore
     activeOperation.value = op
+    if (selectedItemId.value) fetchListings()
+}
+
+// TreeSelect has no built-in autoFilterFocus (unlike Select) — focus the
+// filter input ourselves once the overlay's in the DOM, and hook the input
+// listener so we can expand matching parents dynamically.
+function focusTreeFilter() {
+    nextTick(() => {
+        const input = document.querySelector('.p-treeselect-overlay input[type="text"]')
+        input?.focus()
+
+        if (input && !filterInputEl) {
+            filterInputEl = input
+            filterInputEl.addEventListener('input', onFilterInput)
+        }
+    })
+}
+
+function onTreeHide() {
+    clearTimeout(expandDebounceTimer)
+    if (filterInputEl) {
+        filterInputEl.removeEventListener('input', onFilterInput)
+        filterInputEl = null
+    }
+    expandedKeys.value = {}
 }
 
 async function selectListing(listing) {
@@ -395,17 +552,8 @@ async function selectListing(listing) {
 }
 
 function clearFilters() {
-    searchQuery.value = ''
-    selectedType.value = null
-    selectedAvailability.value = null
+    treeSelection.value = null // triggers watcher chain: selectedItemId -> null -> refetch default listings
     activeOperation.value = 'all'
-}
-
-function onSelectShow() {
-    nextTick(() => {
-        const filterInput = document.querySelector('.p-select-overlay .p-select-filter')
-        if (filterInput) filterInput.focus()
-    })
 }
 
 function firstPhoto(listing) {
@@ -417,6 +565,7 @@ function firstPhoto(listing) {
 function onImageError(event) {
     event.target.style.display = 'none'
 }
+
 
 function openOnUex(listing) {
     const url = `${MARKET_DETAIL_URL}${listing.slug}/`
@@ -513,6 +662,42 @@ function formatDate(timestamp) {
     white-space: nowrap;
 }
 
+/* ── SEARCH: TREESELECT ── */
+.tree-select {
+    min-width: 320px;
+}
+
+/* TreeSelect's overlay is teleported to <body>, so it needs unscoped
+   (:deep-without-ancestor) rules to be reachable. Unlike CascadeSelect,
+   the built-in scrollHeight prop already caps + scrolls the tree
+   properly within the viewport — no manual max-height hack needed. */
+:deep(.p-treeselect-clear-icon) {
+    color: var(--p-text-muted-color);
+}
+
+:deep(.p-treeselect-clear-icon:hover) {
+    color: var(--p-text-color);
+}
+
+.results-note-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--p-text-muted-color);
+    flex-shrink: 0;
+}
+
+.op-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.op-btn:disabled:hover {
+    background: transparent;
+    color: var(--p-text-muted-color);
+}
+
 /* ── OP TOGGLE ── */
 .op-toggle {
     display: flex;
@@ -591,18 +776,6 @@ function formatDate(timestamp) {
     width: 100%;
     box-sizing: border-box;
     padding-right: 0.75rem;
-}
-
-.search-input {
-    width: 260px;
-}
-
-.type-select {
-    min-width: 150px;
-}
-
-.avail-select {
-    min-width: 180px;
 }
 
 /* ── STATES ── */

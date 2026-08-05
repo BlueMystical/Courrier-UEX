@@ -1,8 +1,6 @@
-# Courrier-UEX
-Data Courrier for UEX Corp and Star Citizen Comunity.
-
 <img src="Courrier-UEX/resources/SC-Courrier-UEX_Logo_01.png" alt="SC-Courrier-UEX Preview" width="200">
 
+# Courrier-UEX
 Courrier-UEX is a companion app for Star Citizen traders and haulers. Find where to buy/sell commodities and items, plan the most profitable trade routes, locate ship rentals, and plan multi-stop cargo hauling missions — all powered by live UEX Corp data. 100% standalone and EAC-safe.
 
 # Description

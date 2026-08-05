@@ -6,7 +6,7 @@
 Plan profitable trade routes, find ship rentals, and optimize multi-stop cargo runs — powered by live UEX Corp data. 100% standalone and EAC-safe.
 
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)
-![Downloads](https://img.shields.io/github/downloads/YOURUSER/REPO/total)
+![Downloads](https://img.shields.io/github/downloads/BlueMystical/Courrier-UEX/total)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 [Install](#installation) • [Features](#features) • [Screenshots](#screenshots) • [Quick Start](#quick-start) • [FAQ](#faq) • [Support](#support)
@@ -15,9 +15,8 @@ Plan profitable trade routes, find ship rentals, and optimize multi-stop cargo r
 
 ## Screenshots
 
-![Trade Route Planner](Courrier-UEX/resources/ScreenShot_01.jpg)
-
-![Cargo Mission Planner](Courrier-UEX/resources/ScreenShot_02.jpg)
+<img src="Courrier-UEX/resources/ScreenShot_01.jpg" alt="SC-Courrier-UEX Preview 1" width="400">
+<img src="Courrier-UEX/resources/ScreenShot_02.jpg" alt="SC-Courrier-UEX Preview 2" width="400">
 
 ---
 
@@ -33,7 +32,7 @@ Instead of juggling spreadsheets or browser tabs, open Courrier-UEX, check your 
 
 ## Installation
 
-1. Go to the [Releases](../../releases) page.
+1. Go to the [Releases](../../releases/latest) page.
 2. Download the latest `.exe` installer.
 3. Run the installer and follow the setup steps.
 4. Launch Courrier-UEX from the Start Menu or Desktop shortcut.

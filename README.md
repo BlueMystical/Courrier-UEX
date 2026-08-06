@@ -101,6 +101,7 @@ Pull requests are welcome! For major changes, please open an issue first to disc
 
 ## Support
 
+Join our [Discord Comunity](https://discord.gg/Bz6UkBDPMp)!
 If you find Courrier-UEX useful, consider supporting development:
 
 <a href="https://www.buymeacoffee.com/blue.mystic" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>

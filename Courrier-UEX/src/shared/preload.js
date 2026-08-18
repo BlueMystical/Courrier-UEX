@@ -173,6 +173,12 @@ contextBridge.exposeInMainWorld('api', {
     submitItem: (data) => ipcRenderer.invoke('uex:submitItem', data),
     getCache: () => ipcRenderer.invoke('uex:getCache'),
     getNotifications: () => ipcRenderer.invoke('uex:getNotifications'),
+    /** Reporta la versión actual del juego (fetcheada por el renderer) y
+     *  devuelve { changed, isFirstRun } — decidido de forma centralizada
+     *  en main (gameVersionService), persistido a disco.
+     *  @param {{live: string, ptu: string}} current
+     *  @returns {Promise<{changed: boolean, isFirstRun: boolean}>} */
+    reportGameVersion: (current) => ipcRenderer.invoke('uex:reportGameVersion', current),
   },
 
   // ── ITEM CACHE ─────────────────────────────────────────────────────────────
@@ -186,6 +192,10 @@ contextBridge.exposeInMainWorld('api', {
     /** Get cached item categories.
      *  @returns {Promise<Array>}  */
     getCategories: () => ipcRenderer.invoke('items:getCategories'),
+
+    /** Get cached vehicles catalogue (gateado por versión del juego, ver uexSync.js).
+     *  @returns {Promise<Array>}  */
+    getVehicles: () => ipcRenderer.invoke('items:getVehicles'),
 
     /** Get current sync status.
      *  @returns {Promise<{state, progress, total, done, cached, lastSync, error}>}  */

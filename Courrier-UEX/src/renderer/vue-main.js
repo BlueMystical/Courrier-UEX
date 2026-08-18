@@ -22,9 +22,14 @@ import 'primeicons/primeicons.css'
 
 import { useAppStore } from './AppStore'
 
+// Todo el sync de datos de UEX Corp (terminals/vehicles/items + el gate por
+// versión del juego) vive centralizado en este helper. Ver
+// helpers/uexSync.js para el detalle de por qué y cómo.
+import { syncIfGameVersionChanged, syncItems } from './helpers/uexSync'
+
 const BASE_PRESETS = { aura: Aura, material: Material, lara: Lara, nora: Nora }
 
-// #region --- Helper Methods ---
+// #region --- Helper Methods (theming) ---
 
 // Función para crear preset personalizado con color primario
 function createCustomPreset(basePreset, colorName, customHex = null) {
@@ -86,80 +91,6 @@ function generateColorScale(hex) {
   })
 
   return scale
-}
-
-async function syncTerminalsFromRenderer(store) {
-  try {
-    console.log('[UEX] 🔄 Fetching terminals from renderer...')
-    if (store) store.setSyncState(true, 'Syncing terminals...')
-    const response = await fetch('https://api.uexcorp.uk/2.0/terminals')
-    const data = await response.json()
-    await window.api.invoke('uex:cacheTerminals', data)
-    console.log('[UEX] ✅ Terminals synced successfully')
-    if (store) store.setSyncState(false)
-  } catch (err) {
-    console.error('[UEX] ❌ Renderer sync failed:', err)
-    if (store) store.setSyncState(false)
-  }
-}
-
-// ── Item catalogue sync ───────────────────────────────────────────────────
-// Fetching is triggered by main process (itemCacheService) which checks the 24h TTL.
-// The renderer ONLY fetches when main sends 'items-cache:request-sync'.
-// Do NOT call syncItemsFromRenderer() directly here — that would bypass the TTL check.
-async function syncItemsFromRenderer(store) {
-  try {
-    console.log('[ItemCache] 🔄 Fetching item categories from renderer...')
-    if (store) store.setSyncState(true, 'Syncing item categories...')
-    const BASE = 'https://api.uexcorp.uk/2.0'
-
-    const catRes = await fetch(`${BASE}/categories?type=item`)
-    const catData = await catRes.json()
-    if (catData.status !== 'ok') throw new Error(`categories API: ${catData.status}`)
-    const categories = catData.data || []
-    console.log(`[ItemCache] Found ${categories.length} categories — fetching items...`)
-
-    const allItems = []
-    for (let i = 0; i < categories.length; i++) {
-      const cat = categories[i]
-      if (store) store.setSyncState(true, `Syncing items: ${cat.name} (${i + 1}/${categories.length})`)
-      try {
-        const res = await fetch(`${BASE}/items?id_category=${cat.id}`)
-        const data = await res.json()
-        if (data.status === 'ok') allItems.push(...(data.data || []))
-        //console.log(`[ItemCache]  ✓ [${i + 1}/${categories.length}] ${cat.name}: ${data.data?.length ?? 0} items`)
-      } catch (e) {
-        console.warn(`[ItemCache] ⚠️  Category ${cat.id} (${cat.name}) failed: ${e.message}`)
-      }
-      if (i < categories.length - 1) await new Promise(r => setTimeout(r, 200))
-    }
-
-    if (store) store.setSyncState(true, 'Finalizing items cache...')
-    await window.api.invoke('uex:cacheItems', { categories, items: allItems })
-    console.log(`[ItemCache] ✅ ${allItems.length} items synced to main cache`)
-    if (store) store.setSyncState(false)
-
-  } catch (err) {
-    console.error('[ItemCache] ❌ Renderer sync failed:', err)
-    if (store) store.setSyncState(false)
-    await window.api.invoke('uex:cacheItemsError', err.message)
-  }
-}
-
-async function syncVehiclesFromRenderer() {
-  try {
-    console.log('[UEX] 🔄 Fetching vehicles from API...')
-    const response = await fetch('https://api.uexcorp.uk/2.0/vehicles')
-    const data = await response.json()
-    const vehicles = data.data || []
-    
-    if (vehicles.length > 0) {
-      window.api.invoke('uex:cacheItems', { vehicles })  // Solo envía vehicles
-      console.log(`[UEX] ✅ Vehicles synced successfully (${vehicles.length})`)
-    }
-  } catch (error) {
-    console.error('[UEX] ❌ Error syncing vehicles:', error)
-  }
 }
 
 // #endregion
@@ -242,21 +173,26 @@ async function syncVehiclesFromRenderer() {
     // Montar la aplicación
     app.mount('#app')
 
-    syncTerminalsFromRenderer(store)
-    syncVehiclesFromRenderer(store)
+    // Terminals/vehicles/star_systems/commodities: solo se sincronizan si
+    // cambió la versión del juego, si es el primer arranque, o si a alguna
+    // le falta backfill (ver helpers/uexSync.js).
+    syncIfGameVersionChanged(store)
 
-    // Only sync when main process explicitly requests it (after TTL check)
+    // Items: solo se sincronizan cuando main lo pide, después de chequear
+    // su propio TTL de 24h (itemCacheService.js). No tocar este flujo acá.
     window.api.on('items-cache:request-sync', () => {
       console.log('[ItemCache] 📡 Re-sync requested by main process')
-      syncItemsFromRenderer(store)
+      syncItems(store)
     })
 
+    // Sync manual disparado por el usuario (botón de refresh): ignora el
+    // gate de versión y refresca todo, y de paso actualiza la versión
+    // persistida para no volver a sincronizar de más hasta el próximo patch.
     window.addEventListener('manual-sync-request', async () => {
-        console.log('[Sync] Manual sync requested by user');
-        await syncTerminalsFromRenderer(store);
-        await syncItemsFromRenderer(store);
-        await syncVehiclesFromRenderer(store);
-    });
+      console.log('[Sync] Manual sync requested by user')
+      await syncIfGameVersionChanged(store, { force: true })
+      await syncItems(store)
+    })
 
     console.log('  ✓ App mounted successfully')
   } catch (error) {

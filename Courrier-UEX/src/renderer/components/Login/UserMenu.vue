@@ -1,6 +1,17 @@
 <!-- src/renderer/components/Login/UserMenu.vue -->
  <template>
     <div class="user-menu-wrapper">
+        <Button
+            icon="pi pi-info-circle"
+            text
+            rounded
+            size="small"
+            class="uex-info-btn"
+            aria-label="About UEX login"
+            title="About UEX login"
+            @click="showUexInfo"
+        />
+
         <Avatar 
             v-if="store.currentUser?.photo"
             :image="store.currentUser.photo"
@@ -29,9 +40,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import Avatar from 'primevue/avatar';
 import Menu from 'primevue/menu';
+import Button from 'primevue/button';
 import LoginDialog from '@/components/Login/LoginDialog.vue'; 
 import { useNotify } from '@/components/Notificaciones/Notify';
 import { useAppStore } from '@/AppStore'; 
@@ -40,6 +52,33 @@ const store = useAppStore();
 const notify = useNotify();
 const menu = ref(null);
 const showLoginDialog = ref(false);
+
+// Explica que la cuenta UEX es opcional: solo hace falta para ser DataRunner
+// (subir reportes de precios a UEX Corp). Se muestra bajo demanda con el
+// botón de info, no automáticamente al iniciar la app.
+function showUexInfo() {
+    notify.sticky(
+        "You don't need an account to browse prices, plan cargo runs, or use most features. " +
+        "An UEX API Token is only needed if you want to be a DataRunner and contribute price " +
+        "reports back to UEX Corp — set it up anytime in Settings.",
+        'UEX Account (optional)',
+        'info'
+    );
+}
+
+// Permite que cualquier parte de la app (ej: un item del menú que requiere
+// cuenta UEX) pida abrir el login sin necesidad de acoplarse a este componente.
+function handleRequestLogin() {
+    showLoginDialog.value = true;
+}
+
+onMounted(() => {
+    window.addEventListener('request-login', handleRequestLogin);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('request-login', handleRequestLogin);
+});
 
 /**
  * 1. Calculamos la inicial de forma segura.
@@ -58,10 +97,10 @@ const avatarLabel = computed(() => {
 // Vinculamos los items del menú
 const menuItems = computed(() => [
     {
-        label: store.currentUser ? `Usuario: ${store.currentUser.fullName || store.currentUser.username}` : 'Invitado',
+        label: store.currentUser ? `User: ${store.currentUser.fullName || store.currentUser.username}` : 'Guest',
         items: [
             {
-                label: store.currentUser ? 'Cerrar Sesión' : 'Iniciar Sesión',
+                label: store.currentUser ? 'Log Out' : 'Log In',
                 icon: store.currentUser ? 'pi pi-sign-out' : 'pi pi-sign-in',
                 command: () => {
                     if (store.currentUser) handleLogout();
@@ -82,14 +121,19 @@ function handleLogin(userData) {
         showLoginDialog.value = false;
         
         const name = userData.fullName || userData.username;
-        notify.success(`¡Bienvenido ${name}!`, 'Sesión iniciada');
+        notify.success(`Welcome ${name}!`, 'Signed in');
     }
 }
 
-function handleLogout() {
+async function handleLogout() {
     const prevUser = store.currentUser?.username;
     store.logout();
-    notify.info(`Hasta pronto ${prevUser || ''}`, 'Sesión cerrada');
+
+    // Limpiamos también las credenciales persistidas: si no, el auto-login
+    // de App.vue vuelve a loguear solo en el próximo arranque.
+    await window.api.Settings.set('settings/security/user', null);
+    await window.api.Settings.set('settings/security/rememberMe', false);
+    notify.info(`See you soon ${prevUser || ''}`, 'Signed out');
 }
 </script>
 
@@ -127,5 +171,15 @@ function handleLogout() {
 
 .custom-avatar:hover {
     filter: brightness(1.1);
+}
+
+.uex-info-btn {
+    color: var(--p-text-muted-color) !important;
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+}
+
+.uex-info-btn:hover {
+    color: var(--p-primary-color) !important;
 }
 </style>

@@ -107,6 +107,7 @@ import ConfirmDialog from 'primevue/confirmdialog';
 // Custom Components & Store
 import { useAppStore } from './AppStore';
 import { initNetworkMonitor } from '@/helpers/network';
+import { getFeatureMenu } from '@/helpers/menuConfig';
 import UserMenu from './components/Login/UserMenu.vue';
 import Alert from './components/Notificaciones/Alert.vue';
 
@@ -147,24 +148,12 @@ const verificarInactividad = () => {
     if (tiempoTranscurrido > TIEMPO_LIMITE_MS.value) {
         store.logout();
         notify.sticky(
-            `Sesión cerrada por inactividad (${idleMinutes.value} min).`,
-            'Seguridad',
+            `Signed out due to inactivity (${idleMinutes.value} min).`,
+            'Security',
             'info'
         );
     }
 };
-
-async function checkUEXToken() {
-    const hasToken = await window.api.UEX.checkToken()
-
-    if (!hasToken) {
-        notify.sticky(
-            'Debes configurar tu UEX API Token para habilitar la subida de datos.',
-            'UEX no configurado',
-            'warn'
-        )
-    }
-}
 
 const lastSyncBadge = computed(() => {
     if (!store.lastSync) return null;
@@ -185,8 +174,22 @@ async function manualSync() {
 const hideMenubar = computed(() => route.meta.hideMenubar || false);
 
 // --- CONFIGURACIÓN DEL MENUBAR ---
+// Features públicas: no requieren cuenta UEX, siempre visibles y navegables.
+// La estructura vive en helpers/menuConfig.js, compartida con Home.vue.
 const menubarItems = computed(() => {
-    const s = store.shortcuts || {};
+    const isLoggedIn = !!store.currentUser;
+
+    const publicFeatures = getFeatureMenu({
+        isLoggedIn,
+        onRequireLogin: () => window.dispatchEvent(new CustomEvent('request-login')),
+        shortcuts: store.currentUser?.shortcuts || {}
+    });
+
+    // Items extra que eventualmente entregue el backend según permisos de la cuenta
+    // (opcional, se agregan a continuación de las features públicas sin reemplazarlas)
+    const accountFeatures = isLoggedIn && store.funcionalidades?.length > 0
+        ? store.funcionalidades
+        : [];
 
     return [
         {
@@ -196,9 +199,7 @@ const menubarItems = computed(() => {
                 {
                     label: 'Features',
                     icon: PrimeIcons.BARS,
-                    items: store.funcionalidades && store.funcionalidades.length > 0
-                        ? store.funcionalidades
-                        : [{ label: 'Login to access', disabled: true }]
+                    items: [...publicFeatures, ...accountFeatures]
                 },
                 { separator: true },
                 // Añadimos la propiedad shortcut aquí:
@@ -284,22 +285,29 @@ async function checkUEXNotifications() {
 onMounted(async () => {
     initNetworkMonitor();
 
-    // 0. VERSION CHECK (Forzar re-login tras actualización)
+    // 1. AUTO-LOGIN — se lee ANTES del version check de abajo, porque ese
+    // check ahora depende de si había una sesión guardada.
+    const savedUser = await window.api.Settings.get('settings/security/user');
+    const rememberMe = await window.api.Settings.get('settings/security/rememberMe');
+
+    // 0. VERSION CHECK (forzar re-login tras actualización)
+    // El login a UEX es OPCIONAL — muchos usuarios nunca inician sesión.
+    // Antes este chequeo corría siempre, así que en cada actualización de
+    // versión se marcaba sessionExpired=true incluso para usuarios sin
+    // sesión guardada (les aparecía un aviso de "tu sesión caducó" que
+    // nunca tuvo sentido para ellos). Ahora solo aplica si había una sesión
+    // real para expirar.
     const currentAppVersion = await window.api.System.getVersion();
     const lastVersion = await window.api.Settings.get('settings/version');
     let versionChanged = false;
 
-    if (lastVersion && lastVersion !== '0.0.0' && lastVersion !== currentAppVersion) {
+    if (savedUser && lastVersion && lastVersion !== '0.0.0' && lastVersion !== currentAppVersion) {
         console.log(`[Version] Updated from ${lastVersion} to ${currentAppVersion}. Expiring session...`);
         versionChanged = true;
         store.setSessionExpired(true); // Marcamos que la sesión caducó por actualización
     }
     // Actualizamos la versión guardada para la próxima vez
     await window.api.Settings.set('settings/version', currentAppVersion);
-
-    // 1. AUTO-LOGIN
-    const savedUser = await window.api.Settings.get('settings/security/user');
-    const rememberMe = await window.api.Settings.get('settings/security/rememberMe');
 
     if (savedUser && rememberMe && !versionChanged) {
         store.login(savedUser);
@@ -339,7 +347,6 @@ onMounted(async () => {
     const initialColor = await window.api.Settings.get('settings/theme/color') || 'light';
     store.setColorMode(initialColor);
 
-    await checkUEXToken()
     await checkUEXNotifications()
 
     window.api?.Navigation?.onNavigateTo((ruta) => {

@@ -35,7 +35,7 @@ function getDiskCachePath() {
   return path.join(app.getPath('userData'), 'items-cache.json')
 }
 
-function loadFromDisk() {
+function loadItemsFromDisk() {
   try {
     const filePath = getDiskCachePath()
     if (!fs.existsSync(filePath)) {
@@ -48,20 +48,32 @@ function loadFromDisk() {
       console.log('[ItemCache] 💾 Disk cache invalid — ignoring')
       return null
     }
-    // Vehículos: cargamos siempre lo que haya en disco (fresco o viejo).
-    // Un dato stale es mejor que ningún dato mientras se revalida en background.
-    const vPath = getVehicleDiskCachePath()
-    if (fs.existsSync(vPath)) {
-      const diskVehicles = JSON.parse(fs.readFileSync(vPath, 'utf8'))
-      const vehicles = diskVehicles.vehicles || []
-      uexCache.set(CACHE_KEY_VEHICLES, vehicles)
-      const ageMin = Math.round((Date.now() - (diskVehicles.savedAt || 0)) / 60000)
-      console.log(`[VehicleCache] 💾 Loaded ${vehicles.length} vehicles from disk (age: ${ageMin}min)`)
-    }
     console.log(`[ItemCache] 💾 Disk cache loaded: ${data.items.length} items, savedAt: ${new Date(data.savedAt).toISOString()}`)
     return data
   } catch (e) {
     console.warn('[ItemCache] ⚠️  Failed to load disk cache:', e.message)
+    return null
+  }
+}
+
+// Vehículos: se cargan de forma INDEPENDIENTE del cache de items. Antes esta
+// carga vivía anidada adentro de loadFromDisk() y solo corría si el cache de
+// items existía y era válido — si items no tenía disk cache (primer arranque,
+// cache invalidado, etc.) los vehicles tampoco se cargaban nunca, aunque
+// vehicles-cache.json estuviera perfecto. Un dato stale es mejor que ningún
+// dato mientras se revalida en background.
+function loadVehiclesFromDisk() {
+  try {
+    const vPath = getVehicleDiskCachePath()
+    if (!fs.existsSync(vPath)) return null
+    const diskVehicles = JSON.parse(fs.readFileSync(vPath, 'utf8'))
+    const vehicles = diskVehicles.vehicles || []
+    uexCache.set(CACHE_KEY_VEHICLES, vehicles)
+    const ageMin = Math.round((Date.now() - (diskVehicles.savedAt || 0)) / 60000)
+    console.log(`[VehicleCache] 💾 Loaded ${vehicles.length} vehicles from disk (age: ${ageMin}min)`)
+    return vehicles
+  } catch (e) {
+    console.warn('[VehicleCache] ⚠️  Failed to load vehicles disk cache:', e.message)
     return null
   }
 }
@@ -158,6 +170,12 @@ function requestSync() {
 function startBackgroundSync(win, delayMs = 8000) {
   _win = win
 
+  // Vehículos: se cargan siempre de su propio archivo, independientemente
+  // de si el cache de items existe o no (ver nota en loadVehiclesFromDisk).
+  // El sync/refresh de vehicles ya NO depende del TTL de este servicio —
+  // lo dispara el gate de versión del juego desde el renderer (uexSync.js).
+  loadVehiclesFromDisk()
+
   // 1. Try in-memory cache first (fastest path — same session)
   if (isCacheFresh()) {
     const items = uexCache.get(CACHE_KEY_ITEMS) || []
@@ -176,7 +194,7 @@ function startBackgroundSync(win, delayMs = 8000) {
   // 2. Try loading from disk (persists across app restarts).
   //    IMPORTANT: load it into memory regardless of freshness — stale data
   //    the user can search is far better than an empty cache while we refetch.
-  const disk = loadFromDisk()
+  const disk = loadItemsFromDisk()
   if (disk && Array.isArray(disk.items) && disk.items.length) {
     uexCache.set(CACHE_KEY_CATEGORIES, disk.categories || [])
     uexCache.set(CACHE_KEY_ITEMS, disk.items || [])

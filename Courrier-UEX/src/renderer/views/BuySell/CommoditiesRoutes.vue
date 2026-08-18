@@ -370,7 +370,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import Select from 'primevue/select'
 import TreeSelect from 'primevue/treeselect'
 import Toolbar from 'primevue/toolbar'
@@ -387,15 +387,20 @@ import Tooltip from 'primevue/tooltip'
 // Registro local: en <script setup>, una variable vXxx habilita v-xxx en el template
 const vTooltip = Tooltip
 import { useNotify } from '@/components/Notificaciones/Notify'
+import { useAppStore } from '@/AppStore'
 
 const notify = useNotify()
+const appStore = useAppStore()
 
 const API_BASE = 'https://api.uexcorp.uk/2.0'
 const API_PLANETS = `${API_BASE}/planets`
-const API_COMMODITIES = `${API_BASE}/commodities`
 const API_ROUTES = `${API_BASE}/commodities_routes`
 const API_EXTRACT = `${API_BASE}/data_extract?data=commodities_routes`
-const API_VEHICLES = `${API_BASE}/vehicles`
+// commodities y vehicles ya NO se fetchean acá: viven en el cache central de
+// main (uexCache/itemCacheService), gateados por versión del juego — ver
+// helpers/uexSync.js. Se leen por IPC más abajo (fetchCommodities/fetchVehicles).
+
+let stopSyncWatch = null
 
 // Sistemas habilitados para el filtro de planetas (por ahora, restringido a estos 3)
 const STAR_SYSTEMS = [
@@ -581,6 +586,20 @@ function focusTreeSelectFilter() {
 onMounted(async () => {
     fetchDataExtract()
     await Promise.all([fetchPlanetTree(), fetchCommodities(), fetchVehicles()])
+
+    // Si la view montó antes de que termine el sync inicial gateado por
+    // versión (primer arranque, o backfill de una key nueva), commodities/
+    // vehicles pueden llegar vacíos acá arriba. Se releen solos cuando el
+    // sync global (store.isSyncing) termina.
+    if (!commodities.value.length || !vehicles.value.length) {
+        stopSyncWatch = watch(() => appStore.isSyncing, (isSyncing, wasSyncing) => {
+            if (wasSyncing && !isSyncing) Promise.all([fetchCommodities(), fetchVehicles()])
+        })
+    }
+})
+
+onUnmounted(() => {
+    if (stopSyncWatch) stopSyncWatch()
 })
 
 // --- API CALLS ---
@@ -615,26 +634,27 @@ async function fetchPlanetTree() {
     }
 }
 
+// Catálogo de commodities: vive en uexCache (main), gateado por versión del
+// juego — se lee por IPC, ya no se fetchea acá en cada montaje.
 async function fetchCommodities() {
     try {
-        const res = await fetch(API_COMMODITIES)
-        const json = await res.json()
-        commodities.value = (json.data || []).sort((a, b) => a.name.localeCompare(b.name))
+        const cache = await window.api.UEX.getCache()
+        commodities.value = (cache.commodities?.data || []).sort((a, b) => a.name.localeCompare(b.name))
     } catch (e) {
-        console.error('Error fetching commodities:', e)
+        console.error('Error loading cached commodities:', e)
     }
 }
 
+// Catálogo de vehículos: ídem, vía itemCacheService/uexCache (main).
 async function fetchVehicles() {
     try {
-        const res = await fetch(API_VEHICLES)
-        const json = await res.json()
+        const allVehicles = await window.api.Items.getVehicles()
         // Solo naves con capacidad de carga real (excluye caza, exploración sin bodega, etc.)
-        vehicles.value = (json.data || [])
+        vehicles.value = (allVehicles || [])
             .filter(v => Number(v.scu) > 0)
             .sort((a, b) => a.name_full.localeCompare(b.name_full))
     } catch (e) {
-        console.error('Error fetching vehicles:', e)
+        console.error('Error loading cached vehicles:', e)
     }
 }
 
@@ -767,6 +787,43 @@ function formatCurrency(value) {
     min-width: 0;
     overflow: hidden;
     box-sizing: border-box;
+    position: relative;
+    background-color: var(--color-background-tertiary);
+    isolation: isolate;
+}
+
+/* Mismo patrón que Home.vue (.home-bg), y por la misma razón: el pseudo-
+   elemento absoluto vive fuera del flujo del flex layout, así no depende de
+   min-height (que App.vue pisa con `.card.mt-2 > * { min-height: 0 }`) y no
+   se pierde al desmontar/remontar esta vista al navegar entre rutas — antes
+   esta view no tenía patrón (background: transparent a secas), lo que además
+   dejaba ver el color plano de fondo en vez del patrón del resto de la app. */
+.routes-container::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+        repeating-linear-gradient(0deg,
+            rgba(80, 50, 0, 0.04) 0px, rgba(80, 50, 0, 0.04) 1px,
+            transparent 1px, transparent 4px),
+        repeating-linear-gradient(90deg,
+            rgba(0, 40, 100, 0.016) 0px, rgba(0, 40, 100, 0.016) 1px,
+            transparent 1px, transparent 80px);
+    background-size: 100% 4px, 80px 100%;
+}
+
+/* Modo oscuro — más intenso porque el fondo es oscuro */
+:global(.app-dark) .routes-container::before {
+    background-image:
+        repeating-linear-gradient(0deg,
+            rgba(255, 200, 80, 0.07) 0px, rgba(255, 200, 80, 0.07) 1px,
+            transparent 1px, transparent 4px),
+        repeating-linear-gradient(90deg,
+            rgba(100, 180, 255, 0.03) 0px, rgba(100, 180, 255, 0.03) 1px,
+            transparent 1px, transparent 80px);
+    background-size: 100% 4px, 80px 100%;
 }
 
 /* ── HEADER ── */
@@ -1009,6 +1066,7 @@ function formatCurrency(value) {
     min-height: 0;
     width: 100%;
     min-width: 0;
+    background: transparent;
 }
 
 .content-scroll :deep(.p-scrollpanel-wrapper) {

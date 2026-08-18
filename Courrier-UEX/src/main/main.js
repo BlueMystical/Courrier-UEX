@@ -35,7 +35,9 @@ const fileHelper = require('./helpers/FileHelper')      //<- No lo usamos aqui, 
 const { registerIpcHandlers } = require('./ipcHandlers')
 const settingsHelper = require('./helpers/settingsHelper')
 const { routeMap } = require('../shared/shortcutsConfig.cjs')
+const uexCache = require('./helpers/uexCache')
 const itemCacheService = require('./services/itemCacheService')
+const gameVersionService = require('./services/gameVersionService')
 const screenshotWatcher = require('./helpers/screenshotWatcher')
 const { setupAutoUpdater, checkForUpdates } = require('./updater')
 
@@ -225,6 +227,15 @@ app.whenReady().then(async () => {
     // ─────────────────────────────
     win.webContents.once('did-finish-load', () => {
       initScreenshotWatcher(win)
+
+      // Cache de UEX: cargar lo que haya en disco ANTES de que el renderer
+      // decida si hace falta sincronizar (gate por versión del juego).
+      gameVersionService.load()
+      const cachedTerminals = uexCache.loadFromDisk('terminals')
+      if (cachedTerminals) {
+        console.log(`[UEX] 💾 Terminals cargados de disco (${cachedTerminals?.data?.length ?? 'n/a'})`)
+      }
+
       itemCacheService.startBackgroundSync(win)
     })
 

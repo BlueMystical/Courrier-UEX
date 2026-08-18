@@ -1,11 +1,19 @@
 // src/main/helpers/uexCache.js
 //
-// In-memory key-value cache with optional per-key TTL.
-// Keys are persisted across the session in memory only — not to disk.
+// In-memory key-value cache with optional per-key TTL, and OPTIONAL disk
+// persistence per key (opt-in via the `persist` flag on set()).
+//
+// Sin `persist`, el comportamiento es igual que antes: todo vive solo en
+// memoria y se pierde al reiniciar la app. Con `persist: true`, el valor
+// también se escribe a un JSON en userData y puede recuperarse en el
+// próximo arranque con loadFromDisk(key), ANTES de que exista/expire nada
+// en memoria — útil para keys como 'terminals' que antes no sobrevivían a
+// un reinicio aunque el dato siguiera siendo válido (mismo patch del juego).
 //
 // API:
-//   uexCache.set(key, value, ttlMs?)   — store a value, optionally with TTL
+//   uexCache.set(key, value, ttlMs?, persist?) — store a value, opcionalmente con TTL y a disco
 //   uexCache.get(key)                  — returns value or null (if expired/missing)
+//   uexCache.loadFromDisk(key)         — carga a memoria lo persistido a disco (o null)
 //   uexCache.isExpired(key)            — true if key is missing or TTL has elapsed
 //   uexCache.getAge(key)               — ms since last set, or null
 //   uexCache.delete(key)               — remove a key
@@ -14,10 +22,46 @@
 
 'use strict'
 
+const path = require('path')
+const fs = require('fs')
+const { app } = require('electron')
+
+function getDiskPath(key) {
+  return path.join(app.getPath('userData'), `uex-cache-${key}.json`)
+}
+
+function writeDisk(key, value) {
+  try {
+    fs.writeFileSync(getDiskPath(key), JSON.stringify({ value, savedAt: Date.now() }))
+  } catch (e) {
+    console.warn(`[uexCache] ⚠️  No se pudo persistir "${key}" a disco:`, e.message)
+  }
+}
+
+/**
+ * Carga un valor persistido a disco DIRECTO a memoria (sin chequear TTL —
+ * quien llama decide si el dato sigue siendo válido, p.ej. vía el gate de
+ * versión del juego). Devuelve el valor cargado, o null si no hay nada.
+ */
+function loadFromDisk(key) {
+  try {
+    const filePath = getDiskPath(key)
+    if (!fs.existsSync(filePath)) return null
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+    if (!raw || raw.value === undefined) return null
+    _store[key] = { value: raw.value, setAt: raw.savedAt || Date.now(), ttlMs: 0 }
+    return raw.value
+  } catch (e) {
+    console.warn(`[uexCache] ⚠️  No se pudo cargar "${key}" desde disco:`, e.message)
+    return null
+  }
+}
+
 // Default TTLs for known keys (ms)
 // Override by passing ttlMs to set()
 const DEFAULT_TTLS = {
   terminals:       24 * 60 * 60 * 1000,   // 24 hours
+  star_systems:    24 * 60 * 60 * 1000,   // 24 hours (gateado por versión del juego, ver uex:cacheStarSystems — set() lo llama con ttlMs=0, este default no aplica en la práctica)
   commodities:     24 * 60 * 60 * 1000,   // 24 hours
   items:           24 * 60 * 60 * 1000,   // 24 hours
   item_categories: 24 * 60 * 60 * 1000,   // 24 hours
@@ -34,8 +78,10 @@ const _store = {}
  * @param {string} key
  * @param {*} value
  * @param {number} [ttlMs]  - optional TTL override in ms. 0 = no expiry.
+ * @param {boolean} [persist] - if true, also write this value to disk so it
+ *                              survives app restarts (see loadFromDisk()).
  */
-function set(key, value, ttlMs) {
+function set(key, value, ttlMs, persist = false) {
   const resolvedTtl = ttlMs !== undefined
     ? ttlMs
     : (DEFAULT_TTLS[key] ?? 0)   // 0 = no expiry
@@ -45,6 +91,8 @@ function set(key, value, ttlMs) {
     setAt: Date.now(),
     ttlMs: resolvedTtl
   }
+
+  if (persist) writeDisk(key, value)
 }
 
 /**
@@ -134,4 +182,4 @@ function getStats() {
   })
 }
 
-module.exports = { set, get, isExpired, getAge, getTtlRemaining, delete: del, clear, keys, getStats }
+module.exports = { set, get, isExpired, getAge, getTtlRemaining, delete: del, clear, keys, getStats, loadFromDisk }

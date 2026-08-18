@@ -162,7 +162,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import AutoComplete from 'primevue/autocomplete';
 import DataView from 'primevue/dataview';
 import Button from 'primevue/button';
@@ -171,9 +171,11 @@ import InputNumber from 'primevue/inputnumber';
 import Select from 'primevue/select';
 import Tooltip from 'primevue/tooltip';
 import { useNotify } from '@/components/Notificaciones/Notify';
+import { useAppStore } from '@/AppStore';
 
 const vTooltip = Tooltip;
 const notify = useNotify();
+const appStore = useAppStore();
 
 // --- ESTADOS ---
 const commoditiesList = ref([]);
@@ -190,11 +192,11 @@ const starSystems = ref([]);
 const selectedSystem = ref(null);
 const loadingSystems = ref(false);
 
-const API_COMMODITIES_LIST = 'https://api.uexcorp.uk/2.0/commodities';
+// Precios: siempre en vivo, por eso siguen siendo fetch directo.
 const API_COMMODITY_PRICES = 'https://api.uexcorp.uk/2.0/commodities_prices?id_commodity=';
-const API_STAR_SYSTEMS = 'https://api.uexcorp.uk/2.0/star_systems';
 
 let debounceTimeout = null;
+let stopSyncWatch = null;
 
 const filterOptions = [
     { label: 'Buy From', value: 'buy', icon: 'pi pi-shopping-bag' },
@@ -212,6 +214,7 @@ const systemOptions = computed(() => [
 
 onUnmounted(() => {
     clearTimeout(debounceTimeout);
+    if (stopSyncWatch) stopSyncWatch();
 });
 
 const handleQuantityChange = (event) => {
@@ -240,21 +243,30 @@ const formatLocation = (item) => {
     return parts.join(' > ');
 };
 
-onMounted(async () => {
-    // Carga de commodities y sistemas en paralelo
+// Commodities y star systems ya NO se fetchean acá: viven en el cache
+// centralizado de main (uexCache), sincronizados por el gate de versión del
+// juego en helpers/uexSync.js. Acá solo se leen vía IPC.
+const loadStaticCatalogs = async () => {
     try {
-        const [commoditiesRes, systemsRes] = await Promise.all([
-            fetch(API_COMMODITIES_LIST),
-            fetch(API_STAR_SYSTEMS)
-        ]);
-        const [commoditiesJson, systemsJson] = await Promise.all([
-            commoditiesRes.json(),
-            systemsRes.json()
-        ]);
-        if (commoditiesJson.status === 'ok') commoditiesList.value = commoditiesJson.data;
-        if (systemsJson.status === 'ok') starSystems.value = systemsJson.data;
+        const cache = await window.api.UEX.getCache();
+        commoditiesList.value = cache.commodities?.data || [];
+        starSystems.value = cache.star_systems?.data || [];
     } catch (e) {
-        notify.error('API Error loading data');
+        notify.error('Error loading cached catalogues');
+    }
+};
+
+onMounted(async () => {
+    await loadStaticCatalogs();
+
+    // Si la view montó antes de que termine el sync inicial (primer arranque
+    // de la app, o backfill de una key nueva), estos catálogos llegan vacíos
+    // acá arriba. En vez de reintentar a ciegas, escuchamos cuándo el sync
+    // global (store.isSyncing) termina y releemos el cache en ese momento.
+    if (!commoditiesList.value.length || !starSystems.value.length) {
+        stopSyncWatch = watch(() => appStore.isSyncing, (isSyncing, wasSyncing) => {
+            if (wasSyncing && !isSyncing) loadStaticCatalogs();
+        });
     }
 });
 
@@ -326,12 +338,41 @@ const filteredPrices = computed(() => {
 /* ================= LAYOUT BASE ================= */
 
 .commodities-layout {
+    position: relative;
+    background-color: var(--color-background-tertiary);
+    isolation: isolate;
     height: calc(100vh - 60px);
     display: flex;
     flex-direction: column;
     overflow: hidden;
     padding: 20px;
-    background-color: var(--p-content-background);
+}
+
+.commodities-layout::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+        repeating-linear-gradient(0deg,
+            rgba(80, 50, 0, 0.04) 0px, rgba(80, 50, 0, 0.04) 1px,
+            transparent 1px, transparent 4px),
+        repeating-linear-gradient(90deg,
+            rgba(0, 40, 100, 0.016) 0px, rgba(0, 40, 100, 0.016) 1px,
+            transparent 1px, transparent 80px);
+    background-size: 100% 4px, 80px 100%;
+}
+
+:global(.app-dark) .commodities-layout::before {
+    background-image:
+        repeating-linear-gradient(0deg,
+            rgba(255, 200, 80, 0.07) 0px, rgba(255, 200, 80, 0.07) 1px,
+            transparent 1px, transparent 4px),
+        repeating-linear-gradient(90deg,
+            rgba(100, 180, 255, 0.03) 0px, rgba(100, 180, 255, 0.03) 1px,
+            transparent 1px, transparent 80px);
+    background-size: 100% 4px, 80px 100%;
 }
 
 .commodities-header {

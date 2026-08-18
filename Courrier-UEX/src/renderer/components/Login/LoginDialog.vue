@@ -177,7 +177,7 @@ async function fetchAvatarAsBase64Ex(url) {
 // 3. LÓGICA DE VALIDACIÓN (MODO DESARROLLO / MOCK)
 async function handleLogin(closeCallback) {
   if (!credentials.value.username || !credentials.value.password) {
-    notify.warn('Por favor, completa todos los campos', 'Datos incompletos');
+    notify.warn('Please fill in all fields', 'Missing Information');
     return;
   }
 
@@ -192,7 +192,7 @@ async function handleLogin(closeCallback) {
     const simulateError = Math.random() < 0.3;
 
     if (simulateError) {
-      notify.error('Usuario o contraseña incorrectos', 'Error de Acceso');
+      notify.error('Incorrect username or password', 'Access Error');
     } else {
       // Simulamos lo que devolvería una API de seguridad profesional
       const mockUserData = {
@@ -253,37 +253,17 @@ async function handleLogin(closeCallback) {
         photo: (await fetchAvatarAsBase64Ex(data.data.avatar)) || data.data.avatar,
         role: data.data.is_datarunner > 0 ? 'Data Runner' : 'User',
         token: credentials.value.password, //<- Guardamos el Secret-Key para futuras llamadas a la API (si es necesario)
-        funcionalidades: [
-          {
-            label: 'Buy or Sell',
-            icon: 'pi pi-shopping-cart', //<- https://primevue.org/icons/
-            items: [
-              { label: 'Comodities', icon: 'pi pi-box', shortcut: shortcuts.commodities, route: '/buysell/comodities' }, //<- Ruta como esta declarada en router.js
-              { label: 'Items', icon: 'pi pi-objects-column', shortcut: shortcuts.items, route: '/buysell/items' },
-              { label: 'Vehicles', icon: 'pi pi-car', shortcut: shortcuts.vehicles, route: '/buysell/vehicles' },
-              { label: 'Marketplace', icon: 'pi pi-shopping-bag', shortcut: shortcuts.marketplace, route: '/buysell/marketplace' },
-              { label: 'Trade Routes', icon: 'pi pi-map', route: '/buysell/routes' }
-            ]
-          },
-          {
-            label: 'Hauling',
-            icon: 'pi pi-truck',
-            items: [
-              { label: 'Cargo Mission Planner', icon: 'pi pi-cog', route: '/utilities/hauling' }
-            ]
-          },
-          {
-            label: 'Data Courrier',
-            icon: 'pi pi-server',
-            items: [
-              //{ label: 'Contracts', icon: 'pi pi-book', route: '/contracts' },
-              { label: 'Datarunner Captures', icon: 'pi pi-camera', route: '/datarunner-capture', shortcut: shortcuts.datarunnerCapture },
-              { label: 'Where to go?', icon: 'pi pi-map-marker',   route: '/datarunner/heatmap' },
-              { label: 'UEX Notifications', icon: 'pi pi-bell',     route: '/uex-notifications' },
-              //{ label: 'Where to go', icon: 'pi pi-globe', route: '/places-to-visit' }
-            ]
-          }
-        ],
+        // NOTA: el menú de features está centralizado en helpers/menuConfig.js
+        // (getFeatureMenu), compartido por App.vue y Home.vue. NO redeclarar
+        // items acá: antes este bloque duplicaba Commodities/Items/Vehicles/etc.
+        // y aparecían dos veces en el menú al loguearse.
+        // Solo propagamos los atajos de teclado configurados, que menuConfig
+        // aplica a los items correspondientes.
+        shortcuts,
+        // Hook para futuras features realmente exclusivas de cuenta que
+        // entregue el backend (hoy no hay ninguna; se agregan a continuación
+        // de las features públicas, ver App.vue / Home.vue).
+        funcionalidades: [],
         notifications: []
       };
 

@@ -66,7 +66,7 @@ copyDir(srcPreloadDir, distPreloadDir);
 console.log('\n✅ Main process build complete!\n');
 
 // ==================== PARTE 2: CREAR CARPETAS DE OUTPUT ====================
-console.log('📁 Creating output directories for electron-builder...');
+/* console.log('📁 Creating output directories for electron-builder...');
 
 const outputDirs = [
     // Windows
@@ -78,7 +78,6 @@ const outputDirs = [
     //path.join(__dirname, 'release', 'deb'),
     //path.join(__dirname, 'release', 'rpm')
 ];
-
 outputDirs.forEach(dir => {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -88,7 +87,7 @@ outputDirs.forEach(dir => {
     }
 });
 
-console.log('✅ Output directories ready!\n');
+console.log('✅ Output directories ready!\n'); */
 
 // ==================== PARTE 3: COPIAR latest.yml A INSTALLER ====================
 const installerDir = path.join(__dirname, 'release', 'installer');

@@ -8,8 +8,9 @@ const fs = require('fs')
 
 const windowManager = require('./windowManager')
 const uexService = require('./services/uexService')
-const uexCache = require('./helpers/uexCache') // Cache local en main para terminales, commodities e items (sin persistencia, se llena desde renderer)
+const uexCache = require('./helpers/uexCache') // Cache local en main para terminales, commodities e items (memoria + disco opcional, se llena desde renderer)
 const itemCacheService = require('./services/itemCacheService')
+const gameVersionService = require('./services/gameVersionService') // Fuente de verdad del gate por versión del juego (terminals/vehicles)
 const { processOCR } = require('./services/ocrService')
 const settingsHelper = require('./helpers/settingsHelper')
 const screenshotWatcher = require('./helpers/screenshotWatcher')
@@ -43,14 +44,53 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
             terminals: uexCache.get('terminals') || [],
             stations: uexCache.get('stations') || [],
             commodities: uexCache.get('commodities') || [],
-            items: uexCache.get('items') || []
+            items: uexCache.get('items') || [],
+            star_systems: uexCache.get('star_systems') || []
         }
     })
 
     ipcMain.handle('uex:cacheTerminals', async (_, data) => {
-        uexCache.set('terminals', data)
+        // persist=true: antes esto vivía SOLO en memoria y se perdía en cada
+        // reinicio de la app. Como ahora el sync de terminals está gateado
+        // por la versión del juego (puede pasar mucho tiempo sin re-sincronizar),
+        // necesitamos que sobreviva a un reinicio o el usuario se queda sin
+        // datos hasta el próximo cambio de versión.
+        uexCache.set('terminals', data, 0, true)
         console.log('[UEX] ✅ Terminals cached from renderer', data?.data?.length ?? data, 'items')
         return true
+    })
+
+    // Star systems: mismo criterio que terminals — gateado por versión del
+    // juego (no por TTL), así que persiste a disco para sobrevivir reinicios.
+    ipcMain.handle('uex:cacheStarSystems', async (_, data) => {
+        uexCache.set('star_systems', data, 0, true)
+        console.log('[UEX] ✅ Star systems cached from renderer', data?.data?.length ?? 0, 'items')
+        return true
+    })
+
+    // Catálogos gateados por versión del juego (terminals/vehicles/star_systems/
+    // commodities): si alguno TODAVÍA no tiene datos en cache — típicamente una
+    // instalación existente que ya tenía la versión persistida (changed=false
+    // para siempre) al momento de agregar una key nueva a este gate — el
+    // renderer necesita saberlo para hacer un backfill puntual de esa key,
+    // sin esperar al próximo cambio de versión del juego.
+    function emptyGatedKeys() {
+        return ['terminals', 'vehicles', 'star_systems', 'commodities'].filter(key => {
+            const value = uexCache.get(key)
+            if (!value) return true
+            if (Array.isArray(value)) return value.length === 0
+            if (Array.isArray(value.data)) return value.data.length === 0
+            return false
+        })
+    }
+
+    // El renderer fetchea /game_versions (UEX bloquea llamadas desde main) y
+    // reporta acá la versión actual. gameVersionService decide, de forma
+    // centralizada y persistida a disco, si cambió respecto a la última vez
+    // — el renderer usa la respuesta para decidir si sincroniza terminals/vehicles.
+    ipcMain.handle('uex:reportGameVersion', (_, current) => {
+        const result = gameVersionService.checkAndUpdate(current)
+        return { ...result, missing: emptyGatedKeys() }
     })
 
     ipcMain.handle('uex:getTerminals', async () => {
@@ -94,6 +134,14 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
 
     ipcMain.handle('items:getCategories', () => {
         return itemCacheService.getCategories()
+    })
+
+    // Vehículos: ya se cacheaban en main (gateados por versión del juego,
+    // ver itemCacheService.getVehicles()) pero nunca se expusieron por IPC
+    // — cualquier view que necesitara la lista terminaba haciendo fetch()
+    // directo a /vehicles en cada montaje, salteándose el cache entero.
+    ipcMain.handle('items:getVehicles', () => {
+        return itemCacheService.getVehicles()
     })
 
     ipcMain.handle('items:getSyncStatus', () => {

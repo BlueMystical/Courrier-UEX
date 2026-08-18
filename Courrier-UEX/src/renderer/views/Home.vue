@@ -48,7 +48,7 @@
 
         <template v-else>
           <h2 class="welcome-title">Welcome</h2>
-          <p class="welcome-subtitle">Please Login to continue</p>
+          <p class="welcome-subtitle">Citizen</p>
           <Button label="Login" icon="pi pi-user" @click="showLoginDialog = true" class="login-btn" />
 
           <div class="legal-links">
@@ -77,8 +77,8 @@
     <!-- Divisor vertical -->
     <div class="home-divider-vertical"></div>
 
-    <!-- Panel derecho: Navegación -->
-    <div class="right-panel" v-if="store.currentUser">
+    <!-- Panel derecho: Navegación (siempre visible, la mayoría de features no requieren cuenta) -->
+    <div class="right-panel">
       <div class="welcome-header">
         <h1 class="welcome-text">Welcome to <span class="app-name">Courrier-UEX</span></h1>
         <p class="slogan-text">Everything you need in one place</p>
@@ -94,6 +94,12 @@
               <span v-if="item.shortcut" class="panel-item-shortcut">{{ item.shortcut }}</span>
             </a>
           </router-link>
+
+          <!-- Item con acción directa (ej: UEX Notifications sin login -> abre el LoginDialog) -->
+          <a v-else-if="item.command" v-ripple class="panel-item" href="#" @click.prevent="item.command">
+            <span :class="[item.icon, 'panel-item-icon']" />
+            <span class="panel-item-label">{{ item.label }}</span>
+          </a>
 
           <!-- Item con subitems (header de grupo) -->
           <a v-else v-ripple class="panel-item panel-item-group">
@@ -113,12 +119,6 @@
       </div>
     </div>
 
-    <!-- Si no hay usuario, panel derecho vacío con mensaje -->
-    <div class="right-panel right-panel--empty" v-else>
-      <i class="pi pi-lock empty-lock-icon"></i>
-      <p class="empty-message">Login to access all features</p>
-    </div>
-
     
 
     <LoginDialog v-model:visible="showLoginDialog" @login="handleLogin" />
@@ -131,13 +131,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue'; // FIX: eliminado 'watch' de imports
 import { useAppStore } from '@/AppStore';
 import { useRouter } from 'vue-router';
 import Button from 'primevue/button';
 import PanelMenu from 'primevue/panelmenu';
 import LoginDialog from '@/components/Login/LoginDialog.vue';
 import { useNotify } from '@/components/Notificaciones/Notify';
+import { getFeatureMenu } from '@/helpers/menuConfig';
+import { fetchCurrentGameVersion } from '@/helpers/uexSync';
 
 const store = useAppStore();
 const router = useRouter();
@@ -157,37 +159,36 @@ const uexBadgeSrc = computed(() => {
     : new URL('@/assets/uex-api-badge-powered-clear.png', import.meta.url).href;
 });
 
-// Version del juego (live/ptu) a la que apuntan los datos de UEX Corp
+// Version del juego (live/ptu) a la que apuntan los datos de UEX Corp.
+// El fetch en sí vive centralizado en helpers/uexSync.js (mismo endpoint
+// que usa el gate de sync de terminals/vehicles) para no tener la misma
+// llamada duplicada en dos lugares.
 const gameVersion = ref(null); // { live: '4.9', ptu: '4.10.0' }
 
 async function fetchGameVersion() {
-  try {
-    const res = await fetch('https://api.uexcorp.uk/2.0/game_versions');
-    const json = await res.json();
-    if (json.status === 'ok' && json.data) {
-      gameVersion.value = json.data;
-    }
-  } catch (err) {
-    console.error('No se pudo obtener la version del juego:', err);
-  }
+  gameVersion.value = await fetchCurrentGameVersion();
 }
 
-// Auto-show login if session expired due to update
-watch(() => store.sessionExpired, (newVal) => {
-  if (newVal) {
-    showLoginDialog.value = true;
-    notify.info('Your session has expired due to an app update. Please sign in again.', 'Version Updated');
-  }
-}, { immediate: true });
+// FIX: Eliminado el watch con { immediate: true } que forzaba el popup
+// al montar Home (inicio o regreso de otra vista). Ahora el diálogo solo
+// se abre con el botón "Login" (@click="showLoginDialog = true").
 
-// Construir el modelo del PanelMenu desde las funcionalidades del store
-// (las mismas que aparecen en el Menubar)
+// Construir el modelo del PanelMenu: features públicas (siempre) + extras
+// que eventualmente entregue el backend según permisos de la cuenta.
 const navItems = computed(() => {
-  if (!store.funcionalidades || store.funcionalidades.length === 0) return []
+  const isLoggedIn = !!store.currentUser;
 
-  // store.funcionalidades ya tiene la estructura de menuitems con label, icon, route, items
-  // PanelMenu acepta exactamente el mismo formato
-  return store.funcionalidades
+  const publicFeatures = getFeatureMenu({
+    isLoggedIn,
+    onRequireLogin: () => { showLoginDialog.value = true },
+    shortcuts: store.currentUser?.shortcuts || {}
+  });
+
+  const accountFeatures = isLoggedIn && store.funcionalidades?.length > 0
+    ? store.funcionalidades
+    : [];
+
+  return [...publicFeatures, ...accountFeatures];
 })
 
 function handleLogin(userData) {
@@ -196,10 +197,16 @@ function handleLogin(userData) {
   notify.success(`Welcome back, ${displayName}`, 'Access Granted')
 }
 
-function handleLogout() {
+async function handleLogout() {
   const displayName = store.currentUser?.fullName || store.currentUser?.username
   store.logout()
-  notify.info(`¡Goodbye ${displayName || ''}!`, 'Session closed')
+
+  // Limpiamos también las credenciales persistidas: si no, el auto-login
+  // de App.vue vuelve a loguear solo en el próximo arranque.
+  await window.api.Settings.set('settings/security/user', null)
+  await window.api.Settings.set('settings/security/rememberMe', false)
+
+  notify.info(`Goodbye ${displayName || ''}!`, 'Session closed')
 }
 
 
@@ -228,7 +235,14 @@ async function openUEX() {
 }
 
 onMounted(() => {
-  //notify.alert('Welcome to SC-Courrier-UEX <a href="https://www.youtube.com/shorts/_0roBvhNkBc" target="_blank">Watch the demo</a>', 'Home')
+  // FIX: si quieres mantener un aviso sutil de que la sesión expiró por
+  // actualización, muestra un toast y limpia el flag para que no vuelva
+  // a aparecer al navegar de regreso a Home.
+  if (store.sessionExpired) {
+    notify.info('Your session has expired due to an app update. Please sign in again.', 'Version Updated');
+    store.setSessionExpired(false);
+  }
+
   fetchGameVersion();
 });
 onUnmounted(() => {
@@ -238,7 +252,21 @@ onUnmounted(() => {
 
 <style scoped>
 .home-bg {
+  position: relative;
   background-color: var(--color-background-tertiary);
+  isolation: isolate;
+}
+
+/* El patrón vive en un pseudo-elemento absoluto, fuera del flujo del flex
+   layout: así no depende de min-height (que App.vue puede pisar con
+   `.card.mt-2 > * { min-height: 0 }`) y no se "pierde" al desmontar/remontar esta vista al
+   navegar entre rutas. */
+.home-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image:
     repeating-linear-gradient(0deg,
       rgba(80, 50, 0, 0.04) 0px, rgba(80, 50, 0, 0.04) 1px,
@@ -250,7 +278,7 @@ onUnmounted(() => {
 }
 
 /* Modo oscuro — más intenso porque el fondo es oscuro */
-:global(.app-dark) .home-bg {
+:global(.app-dark) .home-bg::before {
   background-image:
     repeating-linear-gradient(0deg,
       rgba(255, 200, 80, 0.07) 0px, rgba(255, 200, 80, 0.07) 1px,
@@ -267,8 +295,12 @@ onUnmounted(() => {
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 80px);
-  /* ← resta la altura del menubar */
+  /* Antes: min-height: calc(100vh - 80px) fijo, que empataba en especificidad
+     con `.card.mt-2 > * { min-height: 0 }` de App.vue — el desempate por
+     orden de carga es lo que hacía "desaparecer" el patrón tras visitar
+     otra vista lazy-loaded. Con height:100% ya no hay conflicto. */
+  height: 100%;
+  min-height: 0;
   padding: 2rem;
   gap: 0;
 }

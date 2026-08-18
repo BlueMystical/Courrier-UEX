@@ -338,13 +338,16 @@
   </div>
 </template>
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import Select from 'primevue/select'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
 import Dialog from 'primevue/dialog'
 import Drawer from 'primevue/drawer'
 import Tag from 'primevue/tag'
+import { useAppStore } from '@/AppStore'
+
+const appStore = useAppStore()
 
 const starSystems = ref([])
 const selectedStarSystem = ref(68)
@@ -359,6 +362,7 @@ const missions = ref([])
 const missionDialogVisible = ref(false)
 const drawerVisible = ref(false)
 const editingIndex = ref(null)
+let stopSyncWatch = null
 
 const STORAGE_KEY = 'cargo-planner-flight-config'
 const API_BASE = 'https://api.uexcorp.uk/2.0';
@@ -618,20 +622,21 @@ const saveMission = () => {
 
 
 
+// star_systems, commodities y vehicles (ships) ya NO se fetchean acá: viven
+// en el cache central de main (uexCache/itemCacheService), gateados por
+// versión del juego — ver helpers/uexSync.js. Se leen por IPC.
 const fetchStarSystems = async () => {
   try {
-    const res = await fetch(`${API_BASE}/star_systems`)
-    const json = await res.json()
-    if (json.status === 'ok') starSystems.value = json.data.filter(s => s.is_available_live === 1)
-  } catch (e) { console.error('Error fetching star systems', e) }
+    const cache = await window.api.UEX.getCache()
+    starSystems.value = (cache.star_systems?.data || []).filter(s => s.is_available_live === 1)
+  } catch (e) { console.error('Error loading cached star systems', e) }
 }
 
 const fetchCommodities = async () => {
   try {
-    const res = await fetch(`${API_BASE}/commodities`)
-    const json = await res.json()
-    if (json.status === 'ok') commodities.value = json.data.filter(c => c.is_available_live === 1)
-  } catch (e) { console.error('Error fetching commodities', e) }
+    const cache = await window.api.UEX.getCache()
+    commodities.value = (cache.commodities?.data || []).filter(c => c.is_available_live === 1)
+  } catch (e) { console.error('Error loading cached commodities', e) }
 }
 
 const fetchShips = async () => {
@@ -641,10 +646,9 @@ const fetchShips = async () => {
     { name: 'Hull A', capacity: 64 }, { name: 'Railen', capacity: 320 }
   ]
   try {
-    const res = await fetch(`${API_BASE}/vehicles`)
-    const json = await res.json()
-    if (json.status === 'ok') {
-      ships.value = json.data.map(v => ({ name: v.name, capacity: v.scu || 0 })).sort((a, b) => a.name.localeCompare(b.name))
+    const vehicles = await window.api.Items.getVehicles()
+    if (vehicles && vehicles.length) {
+      ships.value = vehicles.map(v => ({ name: v.name, capacity: v.scu || 0 })).sort((a, b) => a.name.localeCompare(b.name))
     } else {
       ships.value = fallbackShips.sort((a, b) => a.name.localeCompare(b.name))
     }
@@ -893,6 +897,20 @@ onMounted(async () => {
   ])
   await loadSystemData(selectedStarSystem.value)
   await loadFlightConfig()
+
+  // Si la view montó antes de que termine el sync inicial gateado por
+  // versión (primer arranque, o backfill de una key nueva), estos catálogos
+  // pueden llegar vacíos acá arriba. Se releen solos cuando el sync global
+  // (store.isSyncing) termina.
+  if (!starSystems.value.length || !commodities.value.length || !ships.value.length) {
+    stopSyncWatch = watch(() => appStore.isSyncing, (isSyncing, wasSyncing) => {
+      if (wasSyncing && !isSyncing) Promise.all([fetchStarSystems(), fetchCommodities(), fetchShips()])
+    })
+  }
+})
+
+onUnmounted(() => {
+  if (stopSyncWatch) stopSyncWatch()
 })
 </script>
 <style scoped>

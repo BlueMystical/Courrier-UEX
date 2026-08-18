@@ -318,9 +318,11 @@ import Drawer from 'primevue/drawer';
 import Fieldset from 'primevue/fieldset';
 import Tooltip from 'primevue/tooltip';
 import { useNotify } from '@/components/Notificaciones/Notify';
+import { useAppStore } from '@/AppStore';
 
 const vTooltip = Tooltip;
 const notify = useNotify();
+const appStore = useAppStore();
 
 // --- ESTADOS ---
 const allItems = ref([]);           // todos los items del cache
@@ -353,14 +355,18 @@ const selectedCategoryId = ref(null);  // id_category elegido
 const categoryItems = ref([]);         // items de la categoría elegida, vía API en vivo
 const loadingCategoryItems = ref(false);
 
+// star_systems y categories ya NO se fetchean acá en crudo — star_systems
+// vive en el cache centralizado de main (uexCache, gateado por versión del
+// juego, ver helpers/uexSync.js) y categories ya está cacheado por
+// itemCacheService (se sincroniza junto con los items). Ambos se leen por
+// IPC más abajo. Precios y items-por-categoría sí deben ser siempre en vivo.
 const API_BASE = 'https://api.uexcorp.uk/2.0';
 const API_ITEM_PRICES = `${API_BASE}/items_prices?id_item=`;
 const API_ITEM_ATTRIBUTES = `${API_BASE}/items_attributes?id_item=`;
-const API_STAR_SYSTEMS = `${API_BASE}/star_systems`;
-const API_CATEGORIES = `${API_BASE}/categories?type=item`;
 const API_ITEMS_BY_CATEGORY = `${API_BASE}/items?id_category=`;
 
 let debounceTimeout = null;
+let stopSyncWatch = null;
 
 const filterOptions = [
     { label: 'Buy From', value: 'buy' },
@@ -453,13 +459,26 @@ watch(cacheStatus, (status) => {
     }
 });
 
-onMounted(async () => {
-    // Carga cache de items y sistemas en paralelo
+// star_systems vive en uexCache (main), gateado por versión del juego —
+// se lee por IPC, nunca fetch directo. Ver helpers/uexSync.js.
+const loadStarSystems = async () => {
     try {
-        const [cachedItems, systemsRes, categoriesRes] = await Promise.all([
+        const cache = await window.api.UEX.getCache();
+        starSystems.value = cache.star_systems?.data || [];
+    } catch (e) {
+        // silencioso: no es crítico para el resto de la view
+    }
+};
+
+onMounted(async () => {
+    // Carga cache de items + categorías (ambos vía itemCacheService, mismo
+    // ciclo de sync) y star_systems (vía uexCache, gate de versión del
+    // juego) en paralelo. Nada de esto hace fetch() directo a la API acá.
+    try {
+        const [cachedItems, cachedCategories] = await Promise.all([
             window.api.Items.getAll(),
-            fetch(API_STAR_SYSTEMS),
-            fetch(API_CATEGORIES)
+            window.api.Items.getCategories(),
+            loadStarSystems()
         ]);
 
         // Items desde cache local
@@ -471,22 +490,28 @@ onMounted(async () => {
         // background todavía no haya terminado. Se queda en 'loading' y los
         // listeners de abajo la resuelven en cuanto termine.
 
-        // Sistemas estelares
-        const systemsJson = await systemsRes.json();
-        if (systemsJson.status === 'ok') starSystems.value = systemsJson.data;
-
-        // Categorías de items
-        const categoriesJson = await categoriesRes.json();
-        if (categoriesJson.status === 'ok') categories.value = categoriesJson.data;
+        if (Array.isArray(cachedCategories) && cachedCategories.length > 0) {
+            categories.value = cachedCategories;
+        }
 
     } catch (e) {
         cacheStatus.value = 'error';
         notify.error('Error loading item cache');
     }
 
+    // Si star_systems llegó vacío (view montada antes de que termine el sync
+    // inicial gateado por versión), se relee cuando ese sync global termina.
+    if (!starSystems.value.length) {
+        stopSyncWatch = watch(() => appStore.isSyncing, (isSyncing2, wasSyncing) => {
+            if (wasSyncing && !isSyncing2) loadStarSystems();
+        });
+    }
+
     // Listeners del sync de items en background (ver preload.js → window.api.Items).
     // Cubren tanto el sync inicial (si la view monta antes de que termine) como
     // los re-syncs periódicos posteriores, sin necesidad de recargar la view.
+    // Las categorías se sincronizan siempre junto con los items, así que se
+    // releen del cache en el mismo evento de sync-complete.
     window.api.Items.onSyncStart(() => {
         isSyncing.value = true;
         if (!allItems.value.length) cacheStatus.value = 'loading';
@@ -500,13 +525,17 @@ onMounted(async () => {
         isSyncing.value = false;
         syncProgress.value = null;
         try {
-            const items = await window.api.Items.getAll();
+            const [items, cats] = await Promise.all([
+                window.api.Items.getAll(),
+                window.api.Items.getCategories()
+            ]);
             if (Array.isArray(items) && items.length > 0) {
                 const wasNotReady = cacheStatus.value !== 'ready';
                 allItems.value = items;
                 cacheStatus.value = 'ready';
                 if (wasNotReady) notify.success(`Item cache ready — ${items.length.toLocaleString()} items`);
             }
+            if (Array.isArray(cats) && cats.length > 0) categories.value = cats;
         } catch (e) {
             // silencioso: si falla esta relectura puntual, el próximo sync-complete lo resuelve
         }
@@ -543,6 +572,7 @@ watch (selectedCategoryId, async (newVal) => {
 onUnmounted(() => {
     clearTimeout(debounceTimeout);
     window.api.Items.offAll();
+    if (stopSyncWatch) stopSyncWatch();
 });
 
 // Búsqueda fuzzy — sobre el cache completo, o restringida a la categoría activa
@@ -684,12 +714,41 @@ const filteredPrices = computed(() => {
 /* ================= LAYOUT ================= */
 
 .items-layout {
+    position: relative;
+    background-color: var(--color-background-tertiary);
+    isolation: isolate;
     height: calc(100vh - 60px);
     display: flex;
     flex-direction: column;
     overflow: hidden;
     padding: 20px;
-    background-color: var(--p-content-background);
+}
+
+.items-layout::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+        repeating-linear-gradient(0deg,
+            rgba(80, 50, 0, 0.04) 0px, rgba(80, 50, 0, 0.04) 1px,
+            transparent 1px, transparent 4px),
+        repeating-linear-gradient(90deg,
+            rgba(0, 40, 100, 0.016) 0px, rgba(0, 40, 100, 0.016) 1px,
+            transparent 1px, transparent 80px);
+    background-size: 100% 4px, 80px 100%;
+}
+
+:global(.app-dark) .items-layout::before {
+    background-image:
+        repeating-linear-gradient(0deg,
+            rgba(255, 200, 80, 0.07) 0px, rgba(255, 200, 80, 0.07) 1px,
+            transparent 1px, transparent 4px),
+        repeating-linear-gradient(90deg,
+            rgba(100, 180, 255, 0.03) 0px, rgba(100, 180, 255, 0.03) 1px,
+            transparent 1px, transparent 80px);
+    background-size: 100% 4px, 80px 100%;
 }
 
 .items-header {

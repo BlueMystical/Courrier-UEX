@@ -155,7 +155,10 @@
                 </div>
                 <div class="mc-info">
                   <div class="mc-title-row">
-                    <h4>{{ mission.name }}</h4>
+                    <h4 :class="{ 'mc-title-done': getMissionProgress(mission).complete }">
+                      <i v-if="getMissionProgress(mission).complete" class="pi pi-check-circle mc-done-icon"></i>
+                      {{ mission.name }}
+                    </h4>
                     <span class="mc-scu">{{ mission.cargoItems.reduce((acc, i) => acc + i.scu, 0) }} SCU</span>
                   </div>
                   <div class="mc-meta">
@@ -199,7 +202,11 @@
           <i class="pi pi-map"></i>
           <div>
             <h3>FLIGHT PLAN</h3>
-            <span class="drawer-sub">{{ routeResult.steps.length }} stops • {{ routeResult.totalDistance.toLocaleString() }} Gm total</span>
+            <span class="drawer-sub">{{ routeResult.steps.length }} stops • {{ Math.round(routeResult.totalDistance).toLocaleString() }} Gm total</span>
+          </div>
+          <div class="drawer-timer" :class="{ active: timerRunning }">
+            <i class="pi pi-clock"></i>
+            <span class="font-mono">{{ formattedTime }}</span>
           </div>
         </div>
       </template>
@@ -219,7 +226,7 @@
           <div v-for="(step, index) in routeResult.steps" :key="index" class="dt-item" :class="{ 'dt-done': isStepDone(step) }">
             <div v-if="index > 0" class="dt-distance">
               <i class="pi pi-upload"></i>
-              <span>{{ step.distance.toLocaleString() }} Gm</span>
+              <span>{{ Math.round(step.distance).toLocaleString() }} Gm</span>
             </div>
 
             <div class="dt-node" :class="[step.type, { done: isStepDone(step) }]">
@@ -446,9 +453,9 @@ const secondsElapsed = ref(0)
 let timerInterval = null
 
 const formattedTime = computed(() => {
-  const mins = Math.floor(secondsElapsed.value / 60)
-  const secs = secondsElapsed.value % 60
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  const hours = Math.floor(secondsElapsed.value / 3600)
+  const mins = Math.floor((secondsElapsed.value % 3600) / 60)
+  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`
 })
 
 const toggleTimer = () => {
@@ -684,7 +691,7 @@ const loadSystemData = async (systemId) => {
       const matrix = {}
       distancesRes.data.forEach(item => {
         if (!matrix[item.id_orbit_origin]) matrix[item.id_orbit_origin] = {}
-        matrix[item.id_orbit_origin][item.id_orbit_destination] = item.distance
+        matrix[item.id_orbit_origin][item.id_orbit_destination] = Number(item.distance) || 0
       })
       distanceMatrix.value = matrix
     }
@@ -742,7 +749,8 @@ const routeResult = computed(() => {
   
   const getDistance = (fromRouteId, toRouteId) => {
     if (!fromRouteId || !toRouteId || fromRouteId === toRouteId) return 0
-    return distanceMatrix.value[fromRouteId]?.[toRouteId] ?? distanceMatrix.value[toRouteId]?.[fromRouteId] ?? 0
+    const raw = distanceMatrix.value[fromRouteId]?.[toRouteId] ?? distanceMatrix.value[toRouteId]?.[fromRouteId] ?? 0
+    return Number(raw) || 0
   }
   
   let safetyIterations = 0
@@ -1092,10 +1100,22 @@ onUnmounted(() => {
 .gauge-fill { height: 100%; background: linear-gradient(90deg, var(--p-primary-color), color-mix(in srgb, var(--p-primary-color) 70%, white)); border-radius: 3px; transition: width 0.5s ease; box-shadow: 0 0 8px color-mix(in srgb, var(--p-primary-color) 25%, transparent); }
 .gauge-fill.danger { background: linear-gradient(90deg, var(--p-red-500), color-mix(in srgb, var(--p-red-500) 70%, white)); box-shadow: 0 0 8px color-mix(in srgb, var(--p-red-500) 25%, transparent); }
 
+/* ─── MISSION MANIFEST PANEL (bounded height + internal scroll) ─── */
+.panel-missions {
+  max-height: 640px;
+}
+.panel-missions .panel-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* ─── ROUTE SUMMARY BAR ─── */
 .route-summary-bar {
   display: flex; gap: 0.625rem; margin-bottom: 0.875rem;
   align-items: center; flex-wrap: wrap;
+  flex-shrink: 0;
 }
 .summary-pill {
   background: color-mix(in srgb, var(--p-text-color) 3%, var(--p-content-background) 97%);
@@ -1137,7 +1157,15 @@ onUnmounted(() => {
 .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 10px color-mix(in srgb, var(--p-primary-color) 30%, transparent); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.mission-grid { display: flex; flex-direction: column; gap: 0.5rem; }
+.mission-grid {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding-right: 0.25rem; margin-right: -0.25rem;
+}
+.mission-grid::-webkit-scrollbar { width: 6px; }
+.mission-grid::-webkit-scrollbar-track { background: transparent; }
+.mission-grid::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--p-text-color) 15%, transparent); border-radius: 3px; }
+.mission-grid::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--p-text-color) 25%, transparent); }
 
 .mission-card-compact {
   display: flex; align-items: center; gap: 0.625rem;
@@ -1147,6 +1175,7 @@ onUnmounted(() => {
   padding: 0.5rem 0.75rem;
   transition: all 0.15s;
   cursor: pointer;
+  flex-shrink: 0;
 }
 .mission-card-compact:hover {
   background: color-mix(in srgb, var(--p-text-color) 5%, var(--p-content-background) 95%);
@@ -1173,7 +1202,9 @@ onUnmounted(() => {
 
 .mc-info { flex: 1; min-width: 0; }
 .mc-title-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.1rem; }
-.mc-title-row h4 { font-size: 0.8rem; font-weight: 700; color: var(--p-text-color); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-title-row h4 { font-size: 0.8rem; font-weight: 700; color: var(--p-text-color); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 0.35rem; }
+.mc-title-row h4.mc-title-done { text-decoration: line-through; color: var(--p-text-secondary-color); }
+.mc-done-icon { color: var(--p-green-500); font-size: 0.75rem; flex-shrink: 0; }
 .mc-scu { font-size: 0.85rem; font-weight: 800; color: var(--p-primary-color); white-space: nowrap; }
 
 .mc-meta { display: flex; align-items: center; gap: 0.35rem; font-size: 0.65rem; color: var(--p-text-secondary-color); }
@@ -1215,10 +1246,22 @@ onUnmounted(() => {
   backdrop-filter: blur(4px);
 }
 
-.drawer-header { display: flex; align-items: center; gap: 0.75rem; color: var(--p-text-color); }
+.drawer-header { display: flex; align-items: center; gap: 0.75rem; color: var(--p-text-color); width: 100%; }
 .drawer-header i { color: var(--p-primary-color); font-size: 1.1rem; }
 .drawer-header h3 { font-size: 0.9rem; font-weight: 800; margin: 0; letter-spacing: 0.05em; }
 .drawer-sub { font-size: 0.65rem; color: var(--p-text-muted-color); letter-spacing: 0.05em; }
+.drawer-timer {
+  display: flex; align-items: center; gap: 0.35rem;
+  margin-left: auto; margin-right: 0.5rem;
+  padding: 0.25rem 0.6rem; border-radius: 6px;
+  font-size: 0.75rem; font-weight: 700;
+  color: var(--p-text-muted-color);
+  background: color-mix(in srgb, var(--p-text-color) 5%, var(--p-content-background) 95%);
+  border: 1px solid var(--p-content-border-color);
+}
+.drawer-timer i { color: var(--p-text-muted-color); font-size: 0.75rem; }
+.drawer-timer.active { color: var(--p-green-500); border-color: color-mix(in srgb, var(--p-green-500) 40%, transparent); background: color-mix(in srgb, var(--p-green-500) 10%, transparent); }
+.drawer-timer.active i { color: var(--p-green-500); }
 
 .drawer-body { padding: 1.25rem; overflow-y: auto; height: 100%; }
 

@@ -22,94 +22,82 @@
             </div>
         </div>
 
-        <!-- Search bar (Filters) -->
-        <Toolbar class="search-toolbar">
-            <template #start>
-            <div class="filter-group">
-<!-- TreeSelect de Planeta, agrupado por sistema estelar -->
-<TreeSelect
-        v-model="selectedPlanet"
-        :options="planetTree"
-        :expandedKeys="expandedKeys"
-        selectionMode="single"
-        placeholder="Origin Planet..."
-        showClear
-        filter
-        filterPlaceholder="Search planet..."
-        class="filter-select"
-        @show="focusTreeSelectFilter"
-        @update:modelValue="onFilterChange">
-        <template #option="{ node }">
-            <div v-if="node.children" class="filter-option-system">
-                <span class="option-name">{{ node.label }}</span>
-            </div>
-            <div v-else class="filter-option">
-                <span class="option-name">{{ node.label }}</span>
-                <span class="option-sub">{{ node.data?.star_system_name }}</span>
-            </div>
-        </template>
-    </TreeSelect>
+        <!-- Panel de Filtros Rediseñado -->
+<div class="search-toolbar-card">
+    <div class="filter-strip">
 
-<!-- Select de Commodity -->
-    <Select 
-        v-model="selectedCommodity" 
-        :options="commodities" 
-        optionLabel="name" 
-        optionValue="id"
-        placeholder="Commodity..." 
-        showClear 
-        filter 
-        autoFilterFocus
-        filterPlaceholder="Search commodity..."
-        class="filter-select" 
-        @change="onFilterChange">
-        <template #option="{ option }">
-            <div class="filter-option">
-                <span class="option-name">{{ option.name }}</span>
-                <span class="option-sub">{{ option.kind }}</span>
-            </div>
-        </template>
-    </Select>
+        <!-- 1. Origin Planet -->
+        <div class="filter-item" :class="{ 'has-value': selectedPlanet }">
+            <label class="filter-label">
+                <i class="pi pi-globe"></i> Origin
+            </label>
+            <TreeSelect v-model="selectedPlanet" :options="planetTree" :expandedKeys="expandedKeys"
+                selectionMode="single" placeholder="All Planets..." showClear filter
+                filterPlaceholder="Search planet..." class="filter-control"
+                @show="focusTreeSelectFilter" @update:modelValue="onFilterChange">
+                <template #option="{ node }">
+                    <div v-if="node.children" class="filter-option-system">
+                        <span class="option-name">{{ node.label }}</span>
+                    </div>
+                    <div v-else class="filter-option">
+                        <span class="option-name">{{ node.label }}</span>
+                        <span class="option-sub">{{ node.data?.star_system_name }}</span>
+                    </div>
+                </template>
+            </TreeSelect>
+        </div>
 
-<!-- Select de Nave: filtra rutas por capacidad de carga real de la nave elegida -->
-    <Select 
-        v-model="selectedVehicle" 
-        :options="vehicles" 
-        optionLabel="name_full" 
-        optionValue="id"
-        placeholder="Any ship (no cargo limit)..." 
-        showClear 
-        filter 
-        autoFilterFocus
-        filterPlaceholder="Search ship..."
-        class="filter-select" 
-        @change="onFilterChange">
-        <template #option="{ option }">
-            <div class="filter-option">
-                <span class="option-name">{{ option.name_full }}</span>
-                <span class="option-sub">{{ option.scu }} SCU</span>
-            </div>
-        </template>
-    </Select>
+        <!-- 2. Commodity -->
+        <div class="filter-item" :class="{ 'has-value': selectedCommodity }">
+            <label class="filter-label">
+                <i class="pi pi-box"></i> Commodity
+            </label>
+            <Select v-model="selectedCommodity" :options="commodities" optionLabel="name" optionValue="id"
+                placeholder="All Commodities..." showClear filter autoFilterFocus
+                filterPlaceholder="Search commodity..." class="filter-control" @change="onFilterChange">
+                <template #option="{ option }">
+                    <div class="filter-option">
+                        <span class="option-name">{{ option.name }}</span>
+                        <span class="option-sub">{{ option.kind }}</span>
+                    </div>
+                </template>
+            </Select>
+        </div>
 
-                <!-- NUEVO INPUT DE INVERSIÓN -->
-                <InputNumber v-model="maxInvestment" placeholder="Max Investment (aUEC)" 
-                    mode="decimal" class="filter-input" :useGrouping="false" clearable />
+        <!-- 3. Ship -->
+        <div class="filter-item" :class="{ 'has-value': selectedVehicle }">
+            <label class="filter-label">
+                <i class="pi pi-truck"></i> Ship
+            </label>
+            <Select v-model="selectedVehicle" :options="vehicles" optionLabel="name_full" optionValue="id"
+                placeholder="No limit..." showClear filter autoFilterFocus
+                filterPlaceholder="Search ship..." class="filter-control" @change="onFilterChange">
+                <template #option="{ option }">
+                    <div class="filter-option">
+                        <span class="option-name">{{ option.name_full }}</span>
+                        <span class="option-sub">{{ option.scu }} SCU</span>
+                    </div>
+                </template>
+            </Select>
+        </div>
 
-                <Button label="Search" icon="pi pi-search" :loading="loading" @click="fetchRoutes" 
-                    :disabled="!canSearch" />
-            </div>
-            </template>
+        <!-- 4. Max Investment -->
+        <div class="filter-item" :class="{ 'has-value': maxInvestment }">
+            <label class="filter-label">
+                <i class="pi pi-wallet"></i> Max Budget
+            </label>
+            <InputNumber v-model="maxInvestment" placeholder="Unlimited"
+                mode="decimal" class="filter-control" :useGrouping="true" clearable />
+        </div>
 
-            <template #end>
-                <SelectButton v-model="sortBy" :options="sortOptions" optionLabel="label" optionValue="value"
-                    class="sort-toggle" :allowEmpty="false" v-if="hasSearched && !loading">
-                    <template #option="{ option }">
-                        <span v-tooltip.top="option.tooltip">{{ option.label }}</span>
-                    </template>
-                </SelectButton>
-            </template>
-        </Toolbar>
+        <!-- Action Button -->
+        <div class="filter-action">
+            <Button label="Find Routes" icon="pi pi-search" :loading="loading"
+                @click="fetchRoutes" :disabled="!canSearch" class="search-btn font-bold" />
+        </div>
+
+    </div>
+</div>
 
         <!-- Scrollable content area -->
         <ScrollPanel class="content-scroll">
@@ -890,6 +878,31 @@ function formatCurrency(value) {
     color: var(--p-primary-color);
 }
 
+.filter-card {
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
+    transition: border-color 0.2s ease;
+}
+
+/* Efecto hover suave en los addons de iconos */
+.p-inputgroup-addon {
+    background: var(--surface-ground);
+    border-color: var(--surface-border);
+    color: var(--primary-color);
+}
+
+.p-inputgroup:focus-within .p-inputgroup-addon {
+    border-color: var(--primary-color);
+}
+
+/* Ajustes de bordes para integrarse bien con PrimeVue PrimeFlex */
+.p-inputgroup .p-select, 
+.p-inputgroup .p-treeselect, 
+.p-inputgroup .p-inputnumber {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+}
+
 /* ── DATA EXTRACT DRAWER ── */
 .extract-drawer-content {
     display: flex;
@@ -976,37 +989,140 @@ function formatCurrency(value) {
 }
 
 /* ── SEARCH ── */
-/* Despojamos al Toolbar de su fondo/borde por defecto para que se vea como
-   la barra de búsqueda original, y forzamos una sola fila. */
+/* Toolbar contenedor */
 .search-toolbar {
-    background: transparent;
-    border: none;
-    padding: 0;
-    flex-shrink: 0;
-    gap: 0.75rem;
+    background: var(--p-content-background, #18181b);
+    border: 1px solid var(--p-content-border-color, #27272a);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
 }
 
 .search-toolbar :deep(.p-toolbar-start) {
     flex: 1;
     min-width: 0;
 }
-
-.filter-group {
-    display: grid;
-    grid-template-columns: minmax(160px, 1.1fr) minmax(160px, 1.1fr) minmax(160px, 1.1fr) 150px auto;
+.search-toolbar :deep(.p-toolbar-end) {
+    display: flex;
     align-items: center;
     gap: 0.75rem;
-    /* Si en pantallas angostas ni así entra, se scrollea en vez de romper el layout */
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-bottom: 2px;
 }
 
-/* Cada control ocupa su propia celda de grilla: no pueden superponerse por más
-   ancho "natural" que traiga el input interno de PrimeVue. */
-.filter-select,
+/* Botón de búsqueda */
+.search-btn {
+    height: 38px;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    white-space: nowrap;
+}
+
+/* Contenedor tipo Consola/HUD */
+.search-toolbar-card {
+    background: rgba(20, 21, 26, 0.85);
+    border: 1px solid var(--p-content-border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Tira horizontal alineada en 1 sola fila */
+.filter-strip {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+/* Cada módulo individual de filtro */
+.filter-item {
+    flex: 1 1 0px;
+    min-width: 0; /* CRUCIAL: permite que el navegador reduzca el campo sin desbordar */
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+/* 2. Forzar a InputNumber y Selects de PrimeVue a ocupar el 100% real de su casilla */
+.filter-control,
+:deep(.p-select),
+:deep(.p-treeselect),
+:deep(.p-inputnumber) {
+    width: 100% !important;
+}
+
+:deep(.p-inputnumber-input) {
+    width: 100% !important;
+    box-sizing: border-box;
+}
+
+/* 3. Asegurar que el contenedor del botón no se encoja ni se solape */
+.filter-action {
+    flex-shrink: 0;
+    margin-left: 0.25rem;
+}
+
+/* Micro-etiquetas superiores con acento de color */
+.filter-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--p-primary-color, #10b981);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    opacity: 0.85;
+}
+
+.filter-label i {
+    font-size: 0.75rem;
+}
+
+/* Grupo de filtros con Wrap flexible para evitar compresión */
+.filter-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+/* Control base de PrimeVue ocupando el 100% de su módulo */
+.filter-control {
+    width: 100%;
+}
+
+/* Resaltado cuando el filtro tiene un valor seleccionado */
+.filter-item.has-value .filter-label {
+    opacity: 1;
+    text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.filter-item.has-value :deep(.p-select),
+.filter-item.has-value :deep(.p-treeselect),
+.filter-item.has-value :deep(.p-inputnumber-input) {
+    border-color: var(--p-primary-color, #10b981) !important;
+}
+
+/* Botón de acción alineado al fondo */
+.filter-action {
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-end;
+}
+
+/* Ancho dinámico y equilibrado para cada dropdown de PrimeVue */
+.filter-select {
+    flex: 1 1 200px;
+    min-width: 180px;
+}
+
+/* Input numérico */
 .filter-input {
-    min-width: 0;
+    flex: 1 1 180px;
+    min-width: 160px;
 }
 
 .filter-group :deep(.p-treeselect),
@@ -1027,11 +1143,7 @@ function formatCurrency(value) {
     white-space: nowrap;
 }
 
-.search-toolbar :deep(.p-toolbar-end) {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
+
 
 .sort-toggle :deep(.p-togglebutton) {
     padding: 0.35rem 0.75rem;
@@ -1040,20 +1152,22 @@ function formatCurrency(value) {
 
 
 
+/* Opciones dentro de los desplegables */
 .filter-option {
     display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    gap: 0.5rem;
 }
 
 .option-name {
-    font-size: 0.9rem;
     font-weight: 500;
 }
 
 .option-sub {
-    font-size: 0.72rem;
-    color: var(--p-text-muted-color);
+    font-size: 0.75rem;
+    opacity: 0.6;
 }
 
 .filter-option-system .option-name {
@@ -1374,6 +1488,7 @@ function formatCurrency(value) {
     font-weight: 500;
     color: var(--p-text-color); /* Fuerza a que sea blanco en dark mode y negro en light mode */
 }
+
 </style>
 <style>
 /* 

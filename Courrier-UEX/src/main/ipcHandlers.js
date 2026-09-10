@@ -111,7 +111,8 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
     })
 
     ipcMain.handle('uex:cacheCommodities', async (_, data) => {
-        uexCache.set('commodities', data)
+        // ttlMs = 0 (sin expiración), persist = true (guarda en userData/uex-cache-commodities.json)
+        uexCache.set('commodities', data, 0, true)
         console.log('[UEX] ✅ Commodities cached from renderer', data?.data?.length ?? 0, 'items')
         return true
     })

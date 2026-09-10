@@ -236,6 +236,12 @@ app.whenReady().then(async () => {
         console.log(`[UEX] 💾 Terminals cargados de disco (${cachedTerminals?.data?.length ?? 'n/a'})`)
       }
 
+      // Cargar las commodities desde disco al arrancar
+      const cachedCommodities = uexCache.loadFromDisk('commodities')
+      if (cachedCommodities) {
+        console.log(`[UEX] 💾 Commodities cargadas de disco (${cachedCommodities?.data?.length ?? 'n/a'})`)
+      }
+
       itemCacheService.startBackgroundSync(win)
     })
 

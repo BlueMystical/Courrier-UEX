@@ -195,22 +195,35 @@ export async function syncIfGameVersionChanged(store, options = {}) {
     // 1. Obtener la versión actual del juego desde el endpoint de UEX
     const response = await fetch('https://api.uexcorp.uk/2.0/game_versions')
     const json = await response.json()
-    const currentVersion = json.data || json // Guarda la versión obtenida
+    const currentVersion = json.data || json
 
     // 2. Reportar al proceso Main para verificar si cambió respecto a disco o faltan claves
-    const { changed, missing } = await window.api.invoke('uex:reportGameVersion', currentVersion)
+    const { changed, missing = [] } = await window.api.invoke('uex:reportGameVersion', currentVersion)
 
     console.log(`[Sync] Version check -> changed: ${changed}, missing:`, missing)
 
-    // 3. Si cambió la versión, si falta alguna clave (backfill), o si es un sync manual/forzado
-    if (changed || (missing && missing.length > 0) || options?.force) {
+    // 3. Si cambió la versión, si faltan claves (backfill), o si es un sync manual/forzado
+    if (changed || missing.length > 0 || options?.force) {
       console.log('[Sync] 🔄 Iniciando re-sincronización de catálogos...')
-      
-      // Ejecutar las sincronizaciones necesarias (terminals, vehicles, items, etc.)
-      if (missing.includes('items') || changed || options?.force) {
+
+      if (changed || options?.force) {
+        // Cambio de versión de SC o Sync manual -> Refrescar todos los catálogos
+        await syncTerminals(store)
+        await syncVehicles(store)
+        await syncStarSystems(store)
+        await syncCommodities(store)
         await syncItems(store)
+      } else {
+        // Muestra de backfill puntual (ej: primer arranque o archivo borrado)
+        for (const key of missing) {
+          if (GATED_SYNCERS[key]) {
+            await GATED_SYNCERS[key](store)
+          }
+        }
+        if (missing.includes('items')) {
+          await syncItems(store)
+        }
       }
-      // ... resto de llamadas de sync ...
     }
   } catch (error) {
     console.error('[Sync] ❌ Error al verificar versión del juego:', error)

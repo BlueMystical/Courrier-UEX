@@ -75,7 +75,7 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
     // renderer necesita saberlo para hacer un backfill puntual de esa key,
     // sin esperar al próximo cambio de versión del juego.
     function emptyGatedKeys() {
-        return ['terminals', 'vehicles', 'star_systems', 'commodities'].filter(key => {
+        return ['terminals', 'vehicles', 'star_systems', 'commodities', 'items'].filter(key => {
             const value = uexCache.get(key)
             if (!value) return true
             if (Array.isArray(value)) return value.length === 0

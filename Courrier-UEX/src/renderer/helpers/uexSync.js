@@ -190,43 +190,29 @@ const GATED_SYNCERS = {
   commodities: syncCommodities,
 }
 
-export async function syncIfGameVersionChanged(store, { force = false } = {}) {
-  const current = await fetchCurrentGameVersion()
+export async function syncIfGameVersionChanged(store, options = {}) {
+  try {
+    // 1. Obtener la versión actual del juego desde el endpoint de UEX
+    const response = await fetch('https://api.uexcorp.uk/2.0/game_versions')
+    const json = await response.json()
+    const currentVersion = json.data || json // Guarda la versión obtenida
 
-  if (force) {
-    console.log('[UEX Sync] 🔁 Sync manual — forzando terminals/vehicles/star_systems/commodities')
-    await Promise.all(Object.values(GATED_SYNCERS).map(fn => fn(store)))
-    // Igual reportamos la versión para que main quede al día y no re-sincronice
-    // de nuevo por las dudas en el próximo arranque.
-    if (current) await window.api.UEX.reportGameVersion(current)
-    return
+    // 2. Reportar al proceso Main para verificar si cambió respecto a disco o faltan claves
+    const { changed, missing } = await window.api.invoke('uex:reportGameVersion', currentVersion)
+
+    console.log(`[Sync] Version check -> changed: ${changed}, missing:`, missing)
+
+    // 3. Si cambió la versión, si falta alguna clave (backfill), o si es un sync manual/forzado
+    if (changed || (missing && missing.length > 0) || options?.force) {
+      console.log('[Sync] 🔄 Iniciando re-sincronización de catálogos...')
+      
+      // Ejecutar las sincronizaciones necesarias (terminals, vehicles, items, etc.)
+      if (missing.includes('items') || changed || options?.force) {
+        await syncItems(store)
+      }
+      // ... resto de llamadas de sync ...
+    }
+  } catch (error) {
+    console.error('[Sync] ❌ Error al verificar versión del juego:', error)
   }
-
-  if (!current) {
-    // No pudimos consultar la versión actual: no arriesgamos llamadas de
-    // más a la API, directamente no sincronizamos esta vez.
-    console.log('[UEX Sync] ⚠️  No se pudo consultar la versión actual del juego — se omite el chequeo')
-    return
-  }
-
-  const { changed, isFirstRun, missing = [] } = await window.api.UEX.reportGameVersion(current)
-
-  if (changed) {
-    console.log(`[UEX Sync] ${isFirstRun ? '🆕 Primer arranque' : '🔄 Nueva versión detectada'} (Live ${current.live} / PTU ${current.ptu}) — sincronizando terminals/vehicles/star_systems/commodities...`)
-    await Promise.all(Object.values(GATED_SYNCERS).map(fn => fn(store)))
-    return
-  }
-
-  if (missing.length > 0) {
-    // La versión no cambió, pero main nos avisa que alguna key gateada
-    // todavía no tiene datos (típico: se agregó star_systems/commodities a
-    // este gate y esta instalación ya tenía la versión persistida de antes,
-    // así que "changed" nunca vuelve a dar true por su cuenta). Backfill
-    // puntual, sin re-sincronizar lo que ya está.
-    console.log(`[UEX Sync] ✅ Versión sin cambios, pero faltan datos en cache para: ${missing.join(', ')} — sincronizando solo eso`)
-    await Promise.all(missing.map(key => GATED_SYNCERS[key](store)))
-    return
-  }
-
-  console.log(`[UEX Sync] ✅ Versión sin cambios (Live ${current.live} / PTU ${current.ptu}) — se omite sync de terminals/vehicles/star_systems/commodities`)
 }

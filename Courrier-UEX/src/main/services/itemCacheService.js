@@ -118,11 +118,36 @@ function isCacheFresh() {
 // Called by main.js IPC handler when renderer delivers fetched data.
 function receiveSyncData(data) {
   const { categories, items, vehicles } = data || {}
+
+  console.log(`[ItemCache] ✅ Received from renderer: ${categories?.length} categories, ${items?.length} items, ${vehicles?.length} vehicles`)
+
+  // Pasar 0 en ttlMs garantiza que NO expire por tiempo en memoria (0 = no expiry)
+  if (categories) uexCache.set(CACHE_KEY_CATEGORIES, categories, 0)
+  if (items) uexCache.set(CACHE_KEY_ITEMS, items, 0)
+  if (vehicles) {
+    console.log(`[VehicleCache] 📥 Receiving ${vehicles.length} vehicles`)
+    uexCache.set(CACHE_KEY_VEHICLES, vehicles, 0)
+    fs.writeFileSync(getVehicleDiskCachePath(), JSON.stringify({ vehicles, savedAt: Date.now() }))
+  }
+  
+  uexCache.set(CACHE_KEY_LAST_SYNC, Date.now(), 0)
+  saveToDisk(categories, items)
+  
+  _state.state = 'done'
+  _state.cached = items?.length ?? 0
+  _state.lastSync = Date.now()
+  _state.progress = 100
+  _state.error = null
+
+  emit('items-cache:sync-complete', { total: _state.cached, errors: 0, lastSync: _state.lastSync })
+}
+/*function receiveSyncData(data) {
+  const { categories, items, vehicles } = data || {}
   
   console.log(`[ItemCache] ✅ Received from renderer: ${categories?.length} categories, ${items?.length} items, ${vehicles?.length} vehicles`)
   
-  if (categories) uexCache.set(CACHE_KEY_CATEGORIES, categories)
-  if (items) uexCache.set(CACHE_KEY_ITEMS, items)
+  if (categories) uexCache.set(CACHE_KEY_CATEGORIES, categories, 0) // 0 = sin caducidad por reloj
+  if (items) uexCache.set(CACHE_KEY_ITEMS, items, 0)                // 0 = sin caducidad por reloj
   if (vehicles) {
     console.log(`[VehicleCache] 📥 Receiving ${vehicles.length} vehicles`)
     uexCache.set(CACHE_KEY_VEHICLES, vehicles)
@@ -148,7 +173,7 @@ function receiveSyncData(data) {
     }))
   }
   emit('items-cache:sync-complete', { total: _state.cached, errors: 0, lastSync: _state.lastSync })
-}
+}*/
 
 // Called by main.js IPC handler when renderer reports a sync error.
 function receiveSyncError(errorMsg) {
@@ -167,72 +192,28 @@ function requestSync() {
   emit('items-cache:request-sync', {})
 }
 
-function startBackgroundSync(win, delayMs = 8000) {
+function startBackgroundSync(win) {
   _win = win
-
-  // Vehículos: se cargan siempre de su propio archivo, independientemente
-  // de si el cache de items existe o no (ver nota en loadVehiclesFromDisk).
-  // El sync/refresh de vehicles ya NO depende del TTL de este servicio —
-  // lo dispara el gate de versión del juego desde el renderer (uexSync.js).
   loadVehiclesFromDisk()
 
-  // 1. Try in-memory cache first (fastest path — same session)
-  if (isCacheFresh()) {
-    const items = uexCache.get(CACHE_KEY_ITEMS) || []
-    _state.state = 'done'
-    _state.cached = items.length
-    _state.lastSync = uexCache.get(CACHE_KEY_LAST_SYNC)
-    _state.progress = 100
-    console.log(`[ItemCache] ✅ In-memory cache fresh (${items.length} items) — skipping sync`)
-    setTimeout(() => emit('items-cache:sync-complete', {
-      total: items.length, errors: 0, lastSync: _state.lastSync, fromCache: true
-    }), 500)
-    scheduleAutoRefresh()
-    return
-  }
-
-  // 2. Try loading from disk (persists across app restarts).
-  //    IMPORTANT: load it into memory regardless of freshness — stale data
-  //    the user can search is far better than an empty cache while we refetch.
   const disk = loadItemsFromDisk()
   if (disk && Array.isArray(disk.items) && disk.items.length) {
-    uexCache.set(CACHE_KEY_CATEGORIES, disk.categories || [])
-    uexCache.set(CACHE_KEY_ITEMS, disk.items || [])
-    uexCache.set(CACHE_KEY_LAST_SYNC, disk.savedAt)
+    // Especificamos ttlMs = 0 para que la carga inicial desde disco no expire a las 24h
+    uexCache.set(CACHE_KEY_CATEGORIES, disk.categories || [], 0)
+    uexCache.set(CACHE_KEY_ITEMS, disk.items || [], 0)
+    uexCache.set(CACHE_KEY_LAST_SYNC, disk.savedAt, 0)
+    
     _state.cached = disk.items.length
     _state.lastSync = disk.savedAt
-
-    const ageMs = Date.now() - disk.savedAt
-    const isFresh = ageMs < TTL_MS
-
-    if (isFresh) {
-      console.log(`[ItemCache] ✅ Disk cache fresh (${disk.items.length} items, age: ${Math.round(ageMs / 60000)}min) — loading into memory`)
-      _state.state = 'done'
-      _state.progress = 100
-      setTimeout(() => emit('items-cache:sync-complete', {
-        total: disk.items.length, errors: 0, lastSync: disk.savedAt, fromCache: true
-      }), 500)
-      scheduleAutoRefresh()
-      return
-    }
-
-    // Stale, but usable right now — serve it and refresh quietly underneath.
-    console.log(`[ItemCache] ♻️  Disk cache stale (${disk.items.length} items, age: ${Math.round(ageMs / 60000)}min) — serving stale data while refreshing in background`)
-    _state.state = 'stale'
+    _state.state = 'done'
     _state.progress = 100
-    setTimeout(() => emit('items-cache:sync-complete', {
-      total: disk.items.length, errors: 0, lastSync: disk.savedAt, fromCache: true, stale: true
-    }), 500)
-    // falls through to schedule a background requestSync() below
+    
+    emit('items-cache:sync-complete', {
+      total: disk.items.length, errors: 0, lastSync: disk.savedAt, fromCache: true
+    })
   } else {
-    console.log('[ItemCache] 💾 No usable disk cache — search results will be empty until the first sync completes')
+    console.log('[ItemCache] 💾 No hay caché en disco — la re-sincronización dependerá de la versión del juego')
   }
-
-  // 3. Kick off (or continue) a background refresh from the API via the renderer.
-  //    This runs whether we had stale data to serve or nothing at all.
-  console.log(`[ItemCache] 🕐 Background sync scheduled in ${delayMs / 1000}s...`)
-  setTimeout(() => requestSync(), delayMs)
-  scheduleAutoRefresh()
 }
 
 function scheduleAutoRefresh() {

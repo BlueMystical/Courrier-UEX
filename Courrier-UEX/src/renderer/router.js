@@ -9,23 +9,19 @@ const routes = [
   { path: '/settings', component: SettingsView, meta: { title: 'Settings', hideMenubar: true } },
   // ---------------------------------------  
   {
-    path: '/buysell/comodities', name: 'Commodities',
-    component: () => import('./views/BuySell/Commodities.vue'),
+    path: '/buysell/comodities', name: 'Commodities', component: () => import('./views/BuySell/Commodities.vue'),
     meta: { title: 'Commodity Prices' }
   },
   {
-    path: '/buysell/items', name: 'Items',
-    component: () => import('./views/BuySell/Items.vue'),
+    path: '/buysell/items', name: 'Items', component: () => import('./views/BuySell/Items.vue'),
     meta: { title: 'Item Prices' }
   },
   {
-    path: '/buysell/vehicles', name: 'Vehicles',
-    component: () => import('./views/BuySell/Vehicles.vue'),
+    path: '/buysell/vehicles', name: 'Vehicles', component: () => import('./views/BuySell/Vehicles.vue'),
     meta: { title: 'Vehicle Market' }
   },
   {
-    path: '/buysell/routes', name: 'Trade Routes',
-    component: () => import('./views/BuySell/CommoditiesRoutes.vue'),
+    path: '/buysell/routes', name: 'Trade Routes', component: () => import('./views/BuySell/CommoditiesRoutes.vue'),
     meta: { title: 'Trade Routes' }
   },
   { path: '/buysell/marketplace', component: () => import('@/views/BuySell/Marketplace.vue') },
@@ -33,20 +29,22 @@ const routes = [
   { path: '/utilities/hauling', component: () => import('@/views/Hauling/CargoMissionPlanner.vue') },
   // ---------------------------------------  
   {
-    path: '/datarunner-capture',    name: 'DatarunnerCaptures',
-    component: () => import('./views/Datarunner/DatarunnerCaptures.vue'),
+    path: '/datarunner-capture', name: 'DatarunnerCaptures', component: () => import('./views/Datarunner/DatarunnerCaptures.vue'),
     meta: { title: 'Datarunner Captures' }
   },
   {
-    path: '/datarunner/heatmap',     name: 'DatarunnerHeatmap',
-    component: () => import('./views/Datarunner/DatarunnerHeatmap.vue'),
+    path: '/datarunner/heatmap', name: 'DatarunnerHeatmap', component: () => import('./views/Datarunner/DatarunnerHeatmap.vue'),
     meta: { title: 'Terminal Heatmap' }
   },
   {
     path: '/uex-notifications', name: 'UexNotifications', component: () => import('./views/UexNotifications.vue'),
     meta: { title: 'UEX Notifications' }
   },
-    // ---------------------------------------  
+  {
+    path: '/tools/ship-components', name: 'ShipComponents', component: () => import('./views/Tools/ShipComponents.vue'),
+    meta: { title: 'Ship Components' }
+  },
+  // ---------------------------------------  
   // otras rutas aquí
   {
     path: '/:pathMatch(.*)*',

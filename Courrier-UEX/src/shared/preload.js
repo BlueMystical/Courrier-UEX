@@ -181,6 +181,16 @@ contextBridge.exposeInMainWorld('api', {
     reportGameVersion: (current) => ipcRenderer.invoke('uex:reportGameVersion', current),
   },
 
+  Net: {
+    /**
+     * Fetch JSON genérico desde main process (evita CORS/CSP para APIs
+     * externas fuera de UEX, ej. api.star-citizen.wiki).
+     * @param {string} url
+     * @returns {Promise<{success:boolean, data?:any, error?:string}>}
+     */
+    fetchJson: (url) => ipcRenderer.invoke('net:fetchJson', url),
+  },
+
   // ── ITEM CACHE ─────────────────────────────────────────────────────────────
   // window.api.Items.*
   Items: {

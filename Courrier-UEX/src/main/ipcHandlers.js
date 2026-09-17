@@ -294,6 +294,67 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
             request.end()
         })
     })
+
+    // Fetch JSON genérico desde main process vía net.request, para evitar
+    // problemas de CORS/CSP en el renderer al pegarle a APIs externas que
+    // no sean UEX. Devuelve { success, data } o { success:false, error }.
+    // Incluye timeout manual: net.request no tiene uno por defecto y puede
+    // quedarse colgado sin disparar 'error' si el server no responde.
+    ipcMain.handle('net:fetchJson', async (event, url) => {
+        return new Promise((resolve) => {
+            let settled = false
+            const finish = (result) => {
+                if (settled) return
+                settled = true
+                resolve(result)
+            }
+
+            console.log('[net:fetchJson] →', url)
+
+            const request = net.request({ method: 'GET', url })
+            request.setHeader('User-Agent', 'Courrier-UEX/1.0 (Electron)')
+            request.setHeader('Accept', 'application/json')
+
+            const timeout = setTimeout(() => {
+                console.error('[net:fetchJson] Timeout after 45s:', url)
+                request.abort()
+                finish({ success: false, error: 'Request timed out after 45s' })
+            }, 45000)
+
+            const chunks = []
+            request.on('response', (response) => {
+                console.log('[net:fetchJson] ← status', response.statusCode, url)
+                response.on('data', (chunk) => chunks.push(chunk))
+                response.on('end', () => {
+                    clearTimeout(timeout)
+                    try {
+                        const body = Buffer.concat(chunks).toString('utf-8')
+                        if (response.statusCode < 200 || response.statusCode >= 300) {
+                            console.error('[net:fetchJson] HTTP error', response.statusCode, url)
+                            finish({ success: false, error: `HTTP ${response.statusCode}` })
+                            return
+                        }
+                        finish({ success: true, data: JSON.parse(body) })
+                    } catch (err) {
+                        console.error('[net:fetchJson] Parse error:', err.message, url)
+                        finish({ success: false, error: err.message })
+                    }
+                })
+                response.on('error', (err) => {
+                    clearTimeout(timeout)
+                    console.error('[net:fetchJson] Response error:', err.message, url)
+                    finish({ success: false, error: err.message })
+                })
+            })
+            request.on('error', (err) => {
+                clearTimeout(timeout)
+                console.error('[net:fetchJson] Request error:', err.message, url)
+                finish({ success: false, error: err.message })
+            })
+            request.end()
+        })
+    })
+
 }
 
 module.exports = { registerIpcHandlers }

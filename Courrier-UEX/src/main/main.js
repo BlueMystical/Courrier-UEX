@@ -172,7 +172,13 @@ app.whenReady().then(async () => {
     // NETWORK HEADER SPOOF (unchanged)
     // ─────────────────────────────
     session.defaultSession.webRequest.onBeforeSendHeaders(
-      { urls: ['https://*.uexcorp.space/*', 'https://*.uexcorp.uk/*', 'https://*.robertsspaceindustries.com/*', 'https://robertsspaceindustries.com/*'] },
+      { urls: [ 
+        'https://\*.uexcorp.space/\*', 
+        'https://\*.uexcorp.uk/\*', 
+        'https://\*.robertsspaceindustries.com/\*', 
+        'https://robertsspaceindustries.com/\*', 
+        'https://\*.starcitizen.tools/\*' 
+      ] },
       (details, callback) => {
         const headers = { ...details.requestHeaders }
         headers['User-Agent'] =
@@ -187,6 +193,8 @@ app.whenReady().then(async () => {
         if (url.includes('.robertsspaceindustries.com')) {
           headers['Referer'] = 'https://robertsspaceindustries.com/'
           headers['Origin'] = 'https://robertsspaceindustries.com'
+        } else if (url.includes('starcitizen.tools')) { 
+          headers['Referer'] = 'https://starcitizen.tools/' 
         } else {
           headers['Referer'] = 'https://uexcorp.space/'
           headers['Origin'] = 'https://uexcorp.space'
@@ -196,9 +204,15 @@ app.whenReady().then(async () => {
       }
     )
 
-    // ─────────────────────────────
-    // WINDOW + TRAY
-    // ─────────────────────────────
+    // Inyectar o permitir la directiva img-src para las imágenes de la Wiki 
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      const responseHeaders = { ...details.responseHeaders }
+      // Ajusta la cabecera CSP en las respuestas cargadas por Electron
+      responseHeaders['Content-Security-Policy'] = [ 
+        "default-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: https://\*.uexcorp.space https://media.robertsspaceindustries.com https://robertsspaceindustries.com https://media.starcitizen.tools https://\*.starcitizen.tools;" 
+      ]
+      callback({ responseHeaders })
+    })
 
     const startMinimized = settingsHelper.getSetting('settings/tray/startMinimized') ?? false
     const minimizeToTray = settingsHelper.getSetting('settings/tray/minimizeToTray') ?? false

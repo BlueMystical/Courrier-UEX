@@ -32,79 +32,42 @@
 
         <div class="filter-group">
           <FloatLabel variant="on" class="filter-wrapper">
-            <Select
-              v-model="sizeFilter"
-              inputId="filter-size"
-              :options="SIZE_OPTIONS"
-              optionLabel="label"
-              optionValue="value"
-              showClear
-              class="filter-select"
-            />
+            <Select v-model="sizeFilter" inputId="filter-size" :options="SIZE_OPTIONS" optionLabel="label"
+              optionValue="value" showClear class="filter-select" />
             <label for="filter-size">Size</label>
           </FloatLabel>
 
           <FloatLabel variant="on" class="filter-wrapper">
-            <Select
-              v-model="gradeFilter"
-              inputId="filter-grade"
-              :options="GRADE_OPTIONS"
-              optionLabel="label"
-              optionValue="value"
-              showClear
-              class="filter-select"
-            />
+            <Select v-model="gradeFilter" inputId="filter-grade" :options="GRADE_OPTIONS" optionLabel="label"
+              optionValue="value" showClear class="filter-select" />
             <label for="filter-grade">Grade</label>
           </FloatLabel>
 
           <FloatLabel variant="on" class="filter-wrapper">
-            <Select
-              v-model="classFilter"
-              inputId="filter-class"
-              :options="CLASS_OPTIONS"
-              optionLabel="label"
-              optionValue="value"
-              showClear
-              class="filter-select"
-            />
+            <Select v-model="classFilter" inputId="filter-class" :options="CLASS_OPTIONS" optionLabel="label"
+              optionValue="value" showClear class="filter-select" />
             <label for="filter-class">Class</label>
           </FloatLabel>
 
-          <Button
-            v-if="sizeFilter !== null || gradeFilter !== null || classFilter !== null"
-            icon="pi pi-filter-slash"
-            text
-            rounded
-            size="small"
-            aria-label="Clear filters"
-            @click="clearFilters"
-          />
+          <Button v-if="sizeFilter !== null || gradeFilter !== null || classFilter !== null" icon="pi pi-filter-slash"
+            text rounded size="small" aria-label="Clear filters" @click="clearFilters" />
         </div>
 
+        <FloatLabel variant="on" class="filter-wrapper columns-wrapper">
+          <MultiSelect v-model="selectedExtraColumns" inputId="extra-columns" :options="EXTRA_COLUMNS"
+            optionLabel="label" optionValue="key" :maxSelectedLabels="1" selectedItemsLabel="{0} columns"
+            class="filter-select" />
+          <label for="extra-columns">Extra columns</label>
+        </FloatLabel>
+
         <span class="result-count">{{ filteredShips.length }} ship(s)</span>
-        <Button
-          icon="pi pi-refresh"
-          label="Reload catalogue"
-          outlined
-          size="small"
-          :loading="loadingCatalog || componentCacheLoading"
-          @click="reloadAll"
-        />
+        <Button icon="pi pi-refresh" label="Reload catalogue" outlined size="small"
+          :loading="loadingCatalog || componentCacheLoading || weaponCacheLoading" @click="reloadAll" />
       </div>
 
-      <DataTable
-        :value="filteredShips"
-        paginator
-        :rows="100"
-        :rowsPerPageOptions="[10, 25, 50, 100]"
-        sortField="name"
-        :sortOrder="1"
-        scrollable
-        scrollHeight="flex"
-        stripedRows
-        class="ship-table"
-        dataKey="uuid"
-      >
+      <!-- Tabla de naves con sus componentes equipados, usando DataTable de PrimeVue -->
+      <DataTable :value="filteredShips" paginator :rows="100" :rowsPerPageOptions="[10, 25, 50, 100]" sortField="name"
+        :sortOrder="1" scrollable scrollHeight="flex" stripedRows class="ship-table" dataKey="uuid">
         <Column field="name" header="Ship" sortable frozen style="min-width: 220px">
           <template #body="{ data }">
             <div class="ship-cell">
@@ -117,35 +80,22 @@
           </template>
         </Column>
 
-        <Column
-          v-for="category in categories"
-          :key="category.key"
-          :header="category.label"
-          style="min-width: 190px"
-        >
+        <Column v-for="category in categories" :key="category.key" :header="category.label" style="min-width: 190px">
           <template #header>
             <i :class="['pi', category.icon]"></i>
-            <span>&nbsp;{{ category.label }}</span>
           </template>
           <template #body="{ data }">
             <template v-if="getCellItems(data, category).length">
-              <div
-                v-for="(item, idx) in getCellItems(data, category)"
-                :key="idx"
-                class="comp-entry"
-              >
+              <div v-for="(item, idx) in getCellItems(data, category)" :key="idx" class="comp-entry">
                 <div class="comp-cell-text">
                   <span class="comp-cell-name-row">
-                    <a
-                      v-if="item.link"
-                      href="#"
-                      class="comp-cell-name comp-name-link"
-                      @click.prevent="showItemDetail(item)"
-                    >{{ item.name }}</a>
+                    <a v-if="item.link" href="#" class="comp-cell-name comp-name-link"
+                      @click.prevent="showItemDetail(item)">{{ item.name }}</a>
                     <span v-else class="comp-cell-name">{{ item.name }}</span>
                     <span v-if="item.count > 1" class="comp-cell-count">&nbsp;×{{ item.count }}</span>
                   </span>
                   <span v-if="item.sizeGradeLine" class="comp-cell-meta">{{ item.sizeGradeLine }}</span>
+                  <span v-if="item.statsLine" class="comp-cell-meta">{{ item.statsLine }}</span>
                   <span v-if="item.class" class="comp-cell-meta comp-cell-class">Class: {{ item.class }}</span>
                 </div>
               </div>
@@ -153,231 +103,218 @@
             <span v-else class="comp-none">—</span>
           </template>
         </Column>
-      </DataTable>
-    </template>
 
-<!-- Drawer con el detalle del componente clickeado -->
-<Drawer v-model:visible="detailDrawerVisible" position="right" class="item-detail-drawer">
-  <template #header>
-    <span class="detail-drawer-title">
-      <i class="pi pi-info-circle"></i>
-      Component details
-    </span>
-  </template>
-
-  <div v-if="detailLoading" class="detail-loading">
-    <ProgressSpinner style="width: 32px; height: 32px" strokeWidth="5" />
-  </div>
-  <div v-else-if="detailError" class="detail-error">
-    <i class="pi pi-exclamation-triangle"></i>
-    <span>{{ detailError }}</span>
-  </div>
-  <div v-else-if="activeDetail" class="detail-content">
-    <!-- Galería de imágenes -->
-    <div v-if="detailImages.length" class="detail-gallery">
-      <img
-        v-for="(img, idx) in detailImages"
-        :key="idx"
-        :src="img"
-        :alt="activeDetail.name"
-        class="detail-image"
-      />
-    </div>
-
-    <!-- Nombre y Clase Principal -->
-    <div class="detail-name-row">
-      <h4 class="detail-name">{{ activeDetail.name }}</h4>
-      <Tag
-        v-if="activeDetail.class"
-        :value="activeDetail.class"
-        :severity="classSeverity(activeDetail.class)"
-      />
-    </div>
-
-    <!-- Fabricante -->
-    <p class="detail-manufacturer">
-      {{ activeDetail.manufacturer?.name }}
-      <span v-if="activeDetail.manufacturer?.code">&nbsp;({{ activeDetail.manufacturer.code }})</span>
-    </p>
-
-    <!-- Badges de estado e información básica de PrimeVue -->
-    <div class="detail-tags-row">
-      <Tag v-if="activeDetail.grade" :value="'Grade ' + activeDetail.grade" severity="info" outlined />
-      <Tag v-if="activeDetail.size != null" :value="'Size ' + activeDetail.size" severity="secondary" outlined />
-      <Tag v-if="activeDetail.is_craftable" value="Craftable" severity="success" />
-      <Tag v-if="activeDetail.is_lootable" value="Lootable" severity="warn" />
-    </div>
-
-    <!-- Descripción del componente -->
-    <p v-if="activeDetail.description?.en_EN" class="detail-desc">
-      {{ activeDetail.description.en_EN }}
-    </p>
-
-    <Divider />
-
-    <!-- Especificaciones Principales -->
-    <h5 class="detail-section-title"><i class="pi pi-sliders-h"></i> General Specifications</h5>
-    <ul class="detail-specs">
-      <li v-if="activeDetail.type_label"><strong>Type:</strong> {{ activeDetail.type_label }}</li>
-      <li v-if="activeDetail.sub_type_label"><strong>Sub-type:</strong> {{ activeDetail.sub_type_label }}</li>
-      <li v-if="activeDetail.classification_label"><strong>Classification:</strong> {{ activeDetail.classification_label }}</li>
-      <li v-if="activeDetail.mass != null"><strong>Mass:</strong> {{ activeDetail.mass.toLocaleString() }} kg</li>
-      <li v-if="minBuyPrice(activeDetail) != null">
-        <strong>Min. buy price:</strong> {{ minBuyPrice(activeDetail).toLocaleString() }} aUEC
-      </li>
-      <li v-if="activeDetail.base_variant?.name">
-        <strong>Base Variant:</strong> {{ activeDetail.base_variant.name }}
-      </li>
-    </ul>
-
-    <!-- Durabilidad y Salvamento -->
-    <template v-if="activeDetail.durability">
-      <Divider />
-      <h5 class="detail-section-title"><i class="pi pi-shield"></i> Durability & Salvage</h5>
-      <ul class="detail-specs">
-        <li v-if="activeDetail.durability.health != null">
-          <strong>Health Points:</strong> {{ activeDetail.durability.health.toLocaleString() }} HP
-        </li>
-        <li v-if="activeDetail.durability.repairable != null">
-          <strong>Repairable:</strong> {{ activeDetail.durability.repairable ? 'Yes' : 'No' }}
-        </li>
-        <li v-if="activeDetail.durability.salvageable != null">
-          <strong>Salvageable:</strong> {{ activeDetail.durability.salvageable ? 'Yes' : 'No' }}
-        </li>
-      </ul>
-
-      <!-- Grid de Resistencias a Daño -->
-      <div v-if="activeDetail.durability.resistance" class="resistance-section">
-        <h6 class="detail-subsection-title">Damage Resistances</h6>
-        <div class="res-grid">
-          <div v-if="activeDetail.durability.resistance.physical != null" class="res-item">
-            <span class="res-label">Physical</span>
-            <span class="res-value">{{ formatResistance(activeDetail.durability.resistance.physical) }}</span>
-          </div>
-          <div v-if="activeDetail.durability.resistance.energy != null" class="res-item">
-            <span class="res-label">Energy</span>
-            <span class="res-value">{{ formatResistance(activeDetail.durability.resistance.energy) }}</span>
-          </div>
-          <div v-if="activeDetail.durability.resistance.thermal != null" class="res-item">
-            <span class="res-label">Thermal</span>
-            <span class="res-value">{{ formatResistance(activeDetail.durability.resistance.thermal) }}</span>
-          </div>
-          <div v-if="activeDetail.durability.resistance.distortion != null" class="res-item">
-            <span class="res-label">Distortion</span>
-            <span class="res-value">{{ formatResistance(activeDetail.durability.resistance.distortion) }}</span>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- Dimensiones y Volumen -->
-    <template v-if="activeDetail.dimension">
-      <Divider />
-      <h5 class="detail-section-title"><i class="pi pi-box"></i> Dimensions & Volume</h5>
-      <ul class="detail-specs">
-        <li v-if="getDimensionsString(activeDetail.dimension)">
-          <strong>Dimensions (W×H×L):</strong> {{ getDimensionsString(activeDetail.dimension) }}
-        </li>
-        <li v-if="activeDetail.dimension.volume_converted != null">
-          <strong>Volume:</strong> {{ activeDetail.dimension.volume_converted.toLocaleString() }} {{ activeDetail.dimension.volume_converted_unit || 'µSCU' }}
-        </li>
-      </ul>
-    </template>
-
-    <!-- Temperatura y Distorsión -->
-    <template v-if="activeDetail.temperature || activeDetail.distortion">
-      <Divider />
-      <h5 class="detail-section-title"><i class="pi pi-sun"></i> Thermal & Distortion</h5>
-      <ul class="detail-specs">
-        <li v-if="activeDetail.temperature?.max_temperature != null">
-          <strong>Max Temperature:</strong> {{ activeDetail.temperature.max_temperature }} °C
-        </li>
-        <li v-if="activeDetail.temperature?.overheat_threshold != null">
-          <strong>Overheat Threshold:</strong> {{ activeDetail.temperature.overheat_threshold }} °C
-        </li>
-        <li v-if="activeDetail.distortion?.max != null">
-          <strong>Max Distortion:</strong> {{ activeDetail.distortion.max.toLocaleString() }}
-        </li>
-        <li v-if="activeDetail.distortion?.shutdown_time != null">
-          <strong>Shutdown Time:</strong> {{ activeDetail.distortion.shutdown_time }} s
-        </li>
-        <li v-if="activeDetail.distortion?.decay_rate != null">
-          <strong>Decay Rate:</strong> {{ activeDetail.distortion.decay_rate }} /s
-        </li>
-      </ul>
-    </template>
-
-    <!-- Red de Recursos y Emisiones -->
-    <template v-if="activeDetail.resource_network || activeDetail.emission">
-      <Divider />
-      <h5 class="detail-section-title"><i class="pi pi-bolt"></i> Power & Emissions</h5>
-      <ul class="detail-specs">
-        <li v-if="activeDetail.resource_network?.generation?.power != null">
-          <strong>Power Generation:</strong> {{ activeDetail.resource_network.generation.power }}
-        </li>
-        <li v-if="activeDetail.resource_network?.usage?.power?.max != null">
-          <strong>Power Draw:</strong> {{ activeDetail.resource_network.usage.power.max }}
-        </li>
-        <li v-if="activeDetail.resource_network?.usage?.coolant?.max != null">
-          <strong>Coolant Draw:</strong> {{ activeDetail.resource_network.usage.coolant.max }}
-        </li>
-        <li v-if="activeDetail.emission?.em_max != null">
-          <strong>Max EM Emission:</strong> {{ activeDetail.emission.em_max.toLocaleString() }}
-        </li>
-        <li v-if="activeDetail.emission?.ir != null">
-          <strong>IR Emission:</strong> {{ activeDetail.emission.ir.toLocaleString() }}
-        </li>
-      </ul>
-    </template>
-
-    <!-- Ubicaciones de compra utilizando DataTable de PrimeVue -->
-    <template v-if="detailPurchaseLocations.length">
-      <Divider />
-      <h5 class="detail-section-title"><i class="pi pi-shopping-cart"></i> Buy Locations</h5>
-      <DataTable
-        :value="detailPurchaseLocations"
-        size="small"
-        stripedRows
-        class="detail-price-table"
-      >
-        <Column field="terminal" header="Terminal"></Column>
-        <Column field="price" header="Price">
+        <!-- Columnas opcionales: se activan desde el selector "Extra columns" de la toolbar -->
+        <Column v-for="col in visibleExtraColumns" :key="col.key" :field="col.field" :header="col.label" sortable
+          style="min-width: 130px">
           <template #body="{ data }">
-            {{ data.price.toLocaleString() }} aUEC
+            <span class="extra-value">{{ formatExtra(data, col) }}</span>
           </template>
         </Column>
       </DataTable>
     </template>
 
-    <!-- Sub-puertos -->
-    <template v-if="activeDetail.ports?.length">
-      <Divider />
-      <h5 class="detail-section-title"><i class="pi pi-sitemap"></i> Sub-ports</h5>
-      <ul class="detail-subports">
-        <li v-for="(p, idx) in activeDetail.ports" :key="idx">
-          {{ p.name || p.type }}
-          <span v-if="p.equipped_item?.name">— {{ p.equipped_item.name }}</span>
-        </li>
-      </ul>
-    </template>
+    <!-- Drawer con el detalle del componente clickeado -->
+    <Drawer v-model:visible="detailDrawerVisible" position="right" class="item-detail-drawer">
+      <template #header>
+        <span class="detail-drawer-title">
+          <i class="pi pi-info-circle"></i>
+          Component details
+        </span>
+      </template>
 
-    <!-- Enlace externo a la Wiki oficial -->
-    <div v-if="activeDetail.web_url" class="detail-actions">
-      <Divider />
-      <Button
-        as="a"
-        :href="activeDetail.web_url"
-        target="_blank"
-        rel="noopener"
-        label="View on Star Citizen Wiki"
-        icon="pi pi-external-link"
-        outlined
-        size="small"
-        class="w-full"
-      />
-    </div>
-  </div>
-</Drawer>
+      <div v-if="detailLoading" class="detail-loading">
+        <ProgressSpinner style="width: 32px; height: 32px" strokeWidth="5" />
+      </div>
+      <div v-else-if="detailError" class="detail-error">
+        <i class="pi pi-exclamation-triangle"></i>
+        <span>{{ detailError }}</span>
+      </div>
+      <div v-else-if="activeDetail" class="detail-content">
+        <!-- Galería de imágenes -->
+        <div v-if="detailImages.length" class="detail-gallery">
+          <img v-for="(img, idx) in detailImages" :key="idx" :src="img" :alt="activeDetail.name" class="detail-image" />
+        </div>
+
+        <!-- Nombre y Clase Principal -->
+        <div class="detail-name-row">
+          <h4 class="detail-name">{{ activeDetail.name }}</h4>
+          <Tag v-if="activeDetail.class" :value="activeDetail.class" :severity="classSeverity(activeDetail.class)" />
+        </div>
+
+        <!-- Fabricante -->
+        <p class="detail-manufacturer">
+          {{ activeDetail.manufacturer?.name }}
+          <span v-if="activeDetail.manufacturer?.code">&nbsp;({{ activeDetail.manufacturer.code }})</span>
+        </p>
+
+        <!-- Badges de estado e información básica de PrimeVue -->
+        <div class="detail-tags-row">
+          <Tag v-if="activeDetail.grade" :value="'Grade ' + activeDetail.grade" severity="info" outlined />
+          <Tag v-if="activeDetail.size != null" :value="'Size ' + activeDetail.size" severity="secondary" outlined />
+          <Tag v-if="activeDetail.is_craftable" value="Craftable" severity="success" />
+          <Tag v-if="activeDetail.is_lootable" value="Lootable" severity="warn" />
+        </div>
+
+        <!-- Descripción del componente -->
+        <p v-if="activeDetail.description?.en_EN" class="detail-desc">
+          {{ activeDetail.description.en_EN }}
+        </p>
+
+        <Divider />
+
+        <!-- Especificaciones Principales -->
+        <h5 class="detail-section-title"><i class="pi pi-sliders-h"></i> General Specifications</h5>
+        <ul class="detail-specs">
+          <li v-if="activeDetail.type_label"><strong>Type:</strong> {{ activeDetail.type_label }}</li>
+          <li v-if="activeDetail.sub_type_label"><strong>Sub-type:</strong> {{ activeDetail.sub_type_label }}</li>
+          <li v-if="activeDetail.classification_label"><strong>Classification:</strong> {{
+            activeDetail.classification_label
+          }}</li>
+          <li v-if="activeDetail.mass != null"><strong>Mass:</strong> {{ activeDetail.mass.toLocaleString() }} kg</li>
+          <li v-if="minBuyPrice(activeDetail) != null">
+            <strong>Min. buy price:</strong> {{ minBuyPrice(activeDetail).toLocaleString() }} aUEC
+          </li>
+          <li v-if="activeDetail.base_variant?.name">
+            <strong>Base Variant:</strong> {{ activeDetail.base_variant.name }}
+          </li>
+        </ul>
+
+        <!-- Durabilidad y Salvamento -->
+        <template v-if="activeDetail.durability">
+          <Divider />
+          <h5 class="detail-section-title"><i class="pi pi-shield"></i> Durability & Salvage</h5>
+          <ul class="detail-specs">
+            <li v-if="activeDetail.durability.health != null">
+              <strong>Health Points:</strong> {{ activeDetail.durability.health.toLocaleString() }} HP
+            </li>
+            <li v-if="activeDetail.durability.repairable != null">
+              <strong>Repairable:</strong> {{ activeDetail.durability.repairable ? 'Yes' : 'No' }}
+            </li>
+            <li v-if="activeDetail.durability.salvageable != null">
+              <strong>Salvageable:</strong> {{ activeDetail.durability.salvageable ? 'Yes' : 'No' }}
+            </li>
+          </ul>
+
+          <!-- Grid de Resistencias a Daño -->
+          <div v-if="activeDetail.durability.resistance" class="resistance-section">
+            <h6 class="detail-subsection-title">Damage Resistances</h6>
+            <div class="res-grid">
+              <div v-if="activeDetail.durability.resistance.physical != null" class="res-item">
+                <span class="res-label">Physical</span>
+                <span class="res-value">{{ formatResistance(activeDetail.durability.resistance.physical) }}</span>
+              </div>
+              <div v-if="activeDetail.durability.resistance.energy != null" class="res-item">
+                <span class="res-label">Energy</span>
+                <span class="res-value">{{ formatResistance(activeDetail.durability.resistance.energy) }}</span>
+              </div>
+              <div v-if="activeDetail.durability.resistance.thermal != null" class="res-item">
+                <span class="res-label">Thermal</span>
+                <span class="res-value">{{ formatResistance(activeDetail.durability.resistance.thermal) }}</span>
+              </div>
+              <div v-if="activeDetail.durability.resistance.distortion != null" class="res-item">
+                <span class="res-label">Distortion</span>
+                <span class="res-value">{{ formatResistance(activeDetail.durability.resistance.distortion) }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Dimensiones y Volumen -->
+        <template v-if="activeDetail.dimension">
+          <Divider />
+          <h5 class="detail-section-title"><i class="pi pi-box"></i> Dimensions & Volume</h5>
+          <ul class="detail-specs">
+            <li v-if="getDimensionsString(activeDetail.dimension)">
+              <strong>Dimensions (W×H×L):</strong> {{ getDimensionsString(activeDetail.dimension) }}
+            </li>
+            <li v-if="activeDetail.dimension.volume_converted != null">
+              <strong>Volume:</strong> {{ activeDetail.dimension.volume_converted.toLocaleString() }} {{
+                activeDetail.dimension.volume_converted_unit || 'µSCU' }}
+            </li>
+          </ul>
+        </template>
+
+        <!-- Temperatura y Distorsión -->
+        <template v-if="activeDetail.temperature || activeDetail.distortion">
+          <Divider />
+          <h5 class="detail-section-title"><i class="pi pi-sun"></i> Thermal & Distortion</h5>
+          <ul class="detail-specs">
+            <li v-if="activeDetail.temperature?.max_temperature != null">
+              <strong>Max Temperature:</strong> {{ activeDetail.temperature.max_temperature }} °C
+            </li>
+            <li v-if="activeDetail.temperature?.overheat_threshold != null">
+              <strong>Overheat Threshold:</strong> {{ activeDetail.temperature.overheat_threshold }} °C
+            </li>
+            <li v-if="activeDetail.distortion?.max != null">
+              <strong>Max Distortion:</strong> {{ activeDetail.distortion.max.toLocaleString() }}
+            </li>
+            <li v-if="activeDetail.distortion?.shutdown_time != null">
+              <strong>Shutdown Time:</strong> {{ activeDetail.distortion.shutdown_time }} s
+            </li>
+            <li v-if="activeDetail.distortion?.decay_rate != null">
+              <strong>Decay Rate:</strong> {{ activeDetail.distortion.decay_rate }} /s
+            </li>
+          </ul>
+        </template>
+
+        <!-- Red de Recursos y Emisiones -->
+        <template v-if="activeDetail.resource_network || activeDetail.emission">
+          <Divider />
+          <h5 class="detail-section-title"><i class="pi pi-bolt"></i> Power & Emissions</h5>
+          <ul class="detail-specs">
+            <li v-if="activeDetail.resource_network?.generation?.power != null">
+              <strong>Power Generation:</strong> {{ activeDetail.resource_network.generation.power }}
+            </li>
+            <li v-if="activeDetail.resource_network?.usage?.power?.max != null">
+              <strong>Power Draw:</strong> {{ activeDetail.resource_network.usage.power.max }}
+            </li>
+            <li v-if="activeDetail.resource_network?.usage?.coolant?.max != null">
+              <strong>Coolant Draw:</strong> {{ activeDetail.resource_network.usage.coolant.max }}
+            </li>
+            <li v-if="activeDetail.emission?.em_max != null">
+              <strong>Max EM Emission:</strong> {{ activeDetail.emission.em_max.toLocaleString() }}
+            </li>
+            <li v-if="activeDetail.emission?.ir != null">
+              <strong>IR Emission:</strong> {{ activeDetail.emission.ir.toLocaleString() }}
+            </li>
+          </ul>
+        </template>
+
+        <!-- Ubicaciones de compra utilizando DataTable de PrimeVue -->
+        <template v-if="detailPurchaseLocations.length">
+          <Divider />
+          <h5 class="detail-section-title"><i class="pi pi-shopping-cart"></i> Buy Locations</h5>
+          <DataTable :value="detailPurchaseLocations" size="small" stripedRows class="detail-price-table">
+            <Column field="terminal" header="Terminal"></Column>
+            <Column field="price" header="Price">
+              <template #body="{ data }">
+                {{ data.price.toLocaleString() }} aUEC
+              </template>
+            </Column>
+          </DataTable>
+        </template>
+
+        <!-- Sub-puertos -->
+        <template v-if="activeDetail.ports?.length">
+          <Divider />
+          <h5 class="detail-section-title"><i class="pi pi-sitemap"></i> Sub-ports</h5>
+          <ul class="detail-subports">
+            <li v-for="(p, idx) in activeDetail.ports" :key="idx">
+              {{ p.name || p.type }}
+              <span v-if="p.equipped_item?.name">— {{ p.equipped_item.name }}</span>
+            </li>
+          </ul>
+        </template>
+
+        <!-- Enlace externo a la Wiki oficial -->
+        <div v-if="activeDetail.web_url" class="detail-actions">
+          <Divider />
+          <Button as="a" :href="activeDetail.web_url" target="_blank" rel="noopener" label="View on Star Citizen Wiki"
+            icon="pi pi-external-link" outlined size="small" class="w-full" />
+        </div>
+      </div>
+    </Drawer>
 
 
   </div>
@@ -389,12 +326,11 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
+import MultiSelect from 'primevue/multiselect';
 import FloatLabel from 'primevue/floatlabel';
 import Button from 'primevue/button';
 import ProgressSpinner from 'primevue/progressspinner';
 import Tag from 'primevue/tag';
-// NOTA: en PrimeVue 4 el Drawer (antes 'Sidebar') reemplaza al Popover para
-// este panel — se controla con v-model:visible en vez de .toggle(event).
 import Drawer from 'primevue/drawer';
 import { useNotify } from '@/components/Notificaciones/Notify';
 
@@ -466,6 +402,59 @@ function clearFilters() {
   classFilter.value = null;
 }
 
+// ── Columnas opcionales ─────────────────────────────────────────────────
+// Se eligen desde el MultiSelect "Extra columns" de la toolbar y la selección
+// queda guardada en localStorage. 'field' es la ruta (con puntos) dentro del
+// registro de la nave: la usan tanto el sort de PrimeVue como formatExtra().
+// Ojo: la deflexión vive en armor.deflection.*, no en la raíz de la nave.
+const EXTRA_COLUMNS_KEY = 'shipComponents:extraColumns:v1';
+const EXTRA_COLUMNS = [
+  { key: 'cargo', label: 'Cargo (SCU)', field: 'cargo_capacity' },
+  { key: 'fuel', label: 'Fuel capacity', field: 'fuel.capacity' },
+  { key: 'armorHp', label: 'Armor HP', field: 'armor.health' },
+  { key: 'deflPhysical', label: 'Deflection (Physical)', field: 'armor.deflection.physical' },
+  { key: 'deflEnergy', label: 'Deflection (Energy)', field: 'armor.deflection.energy' },
+];
+
+function loadExtraColumns() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(EXTRA_COLUMNS_KEY) || '[]');
+    const valid = new Set(EXTRA_COLUMNS.map((c) => c.key));
+    return Array.isArray(raw) ? raw.filter((k) => valid.has(k)) : [];
+  } catch (e) {
+    console.error('Unexpected Error: ', e);
+    return [];
+  }
+}
+
+const selectedExtraColumns = ref(loadExtraColumns());
+
+watch(selectedExtraColumns, (keys) => {
+  try {
+    localStorage.setItem(EXTRA_COLUMNS_KEY, JSON.stringify(keys));
+  } catch (e) {
+    console.error('Unexpected Error: ', e);
+  }
+});
+
+// Se mantiene el orden de EXTRA_COLUMNS, no el orden en que se fueron tildando.
+const visibleExtraColumns = computed(() =>
+  EXTRA_COLUMNS.filter((c) => selectedExtraColumns.value.includes(c.key))
+);
+
+function formatExtra(ship, col) {
+  try {
+    const value = col.field.split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), ship);
+    if (value === null || value === undefined || Number.isNaN(value)) return '—';
+    return typeof value === 'number'
+      ? value.toLocaleString(undefined, { maximumFractionDigits: 2 })
+      : String(value);
+  } catch (e) {
+    console.error('Unexpected Error: ', e);
+    return '—';
+  }
+}
+
 // grade en ship.ports[].equipped_item viene como número (1-4); lo mostramos
 // como letra (A-D). El endpoint de detalle del item (/items/{uuid}) en
 // cambio ya devuelve el grade como letra directamente.
@@ -483,17 +472,17 @@ function gradeLabel(grade) {
 }
 
 // Formatea los coeficientes de resistencia a porcentajes 
-const formatResistance = (val) => { 
-  if (val == null) return 'N/A' 
-  return `${(val * 100).toFixed(0)}%` 
-}; 
-  
+const formatResistance = (val) => {
+  if (val == null) return 'N/A'
+  return `${(val * 100).toFixed(0)}%`
+};
+
 // Extrae y formatea el ancho, alto y largo desde dimensions o true\_dimension 
-const getDimensionsString = (dim) => { 
-  if (!dim) return null 
-  const d = dim.dimensions || dim.true_dimension 
-  if (!d) return null 
-  return `${d.width}m × ${d.height}m × ${d.length}m` 
+const getDimensionsString = (dim) => {
+  if (!dim) return null
+  const d = dim.dimensions || dim.true_dimension
+  if (!d) return null
+  return `${d.width}m × ${d.height}m × ${d.length}m`
 };
 
 // "Size: 3, Grade: A" — primera línea secundaria bajo el nombre del componente.
@@ -636,9 +625,140 @@ async function fetchComponentCache(force = false) {
   }
 }
 
+// ── Cache de armas (vehicle-weapons) ────────────────────────────────────
+// Las armas de cada nave (ship.weaponry.fixed_weapons) traen nombre + dps/alpha
+// pero NO size, grade, class ni link. Eso sale de /vehicle-weapons. En vez de
+// pedir arma por arma con filter[name] + filter[size] (una request por arma
+// distinta), bajamos la lista completa UNA vez, la guardamos "slim" (cada
+// registro completo pesa varios KB) y matcheamos por nombre. Mismo TTL de 24h
+// y mismo criterio stale-while-revalidate: se muestra lo guardado al instante
+// y, si venció, se refresca por detrás.
+const WEAPON_CACHE_KEY = 'shipComponents:weaponCache:v1';
+const WEAPON_CACHE_URL = 'https://api.star-citizen.wiki/api/vehicle-weapons';
+
+const weaponCache = ref([]); // registros slim, ver slimWeapon()
+const weaponCacheLoading = ref(false);
+
+function loadStoredCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.savedAt || !Array.isArray(parsed?.items)) return null;
+    return parsed;
+  } catch (e) {
+    console.error('Unexpected Error: ', e);
+    return null;
+  }
+}
+
+function saveStoredCache(key, items) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), items }));
+  } catch (e) {
+    console.error('Unexpected Error: ', e);
+  }
+}
+
+/** Solo lo que usa la tabla; el detalle completo se pide por 'link' al abrir el Drawer. */
+function slimWeapon(w) {
+  return {
+    uuid: w.uuid,
+    name: w.name,
+    class_name: w.class_name || null,
+    size: w.size ?? null,
+    grade: w.grade ?? null,
+    class: w.class ?? null,
+    link: w.link || null,
+    // alpha sirve para desempatar si dos armas comparten nombre (ver lookupWeapon)
+    alpha: w.vehicle_weapon?.damage?.alpha_total ?? null,
+  };
+}
+
+/** Sigue links.next hasta agotar la paginación (con guarda contra loops). */
+async function fetchAllPages(startUrl, maxPages = 40) {
+  const all = [];
+  const visitedUrls = new Set();
+  let url = startUrl;
+  let page = 1;
+
+  while (url && page <= maxPages) {
+    if (visitedUrls.has(url)) {
+      console.error('Unexpected Error: ', new Error(`Pagination loop detected at ${url}`));
+      break;
+    }
+    visitedUrls.add(url);
+
+    const json = await fetchJson(url);
+    if (Array.isArray(json?.data)) all.push(...json.data);
+
+    url = json?.links?.next || null;
+    page += 1;
+  }
+  return all;
+}
+
+async function fetchWeaponCache(force = false) {
+  try {
+    const cached = loadStoredCache(WEAPON_CACHE_KEY);
+    if (cached) weaponCache.value = cached.items; // stale-while-revalidate
+    if (cached && !force && isComponentCacheFresh(cached.savedAt)) {
+      console.log(`[ShipComponents] Weapon cache loaded from storage: ${cached.items.length} items`);
+      return;
+    }
+
+    weaponCacheLoading.value = true;
+    const slim = (await fetchAllPages(WEAPON_CACHE_URL)).map(slimWeapon);
+    weaponCache.value = slim;
+    saveStoredCache(WEAPON_CACHE_KEY, slim);
+    console.log(`[ShipComponents] Weapon cache fetched: ${slim.length} items`);
+  } catch (e) {
+    console.error('Unexpected Error: ', e);
+    notify.error('Could not load the weapons list — weapons will show name, DPS and alpha only.', 'Ship Components');
+  } finally {
+    weaponCacheLoading.value = false;
+  }
+}
+
+// nombre (minúsculas) -> [armas]. Es una lista porque el nombre no es único
+// (el slug de la muestra es "revenant-gatling-2").
+const weaponIndex = computed(() => {
+  const byName = new Map();
+  for (const w of weaponCache.value) {
+    const key = (w.name || '').toLowerCase();
+    if (!key) continue;
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key).push(w);
+  }
+  return byName;
+});
+
+/** Busca el arma por nombre; si hay varias con el mismo nombre, desempata por alpha. */
+function lookupWeapon(name, alpha) {
+  try {
+    const list = weaponIndex.value.get((name || '').toLowerCase());
+    if (!list?.length) return null;
+    if (list.length === 1 || alpha == null) return list[0];
+    return list.find((w) => w.alpha != null && Math.abs(w.alpha - alpha) < 0.1) || list[0];
+  } catch (e) {
+    console.error('Unexpected Error: ', e);
+    return null;
+  }
+}
+
+/** "DPS 1,266 • Alpha 63.3" a partir del arma tal como viene en ship.weaponry. */
+function weaponStatsLine(w) {
+  const fmt = (v) => v.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  const parts = [];
+  if (typeof w?.dps === 'number') parts.push(`DPS ${fmt(w.dps)}`);
+  if (typeof w?.alpha === 'number') parts.push(`Alpha ${fmt(w.alpha)}`);
+  return parts.join(' • ');
+}
+
 function reloadAll() {
   fetchCatalog(true);
   fetchComponentCache(true);
+  fetchWeaponCache(true);
 }
 
 /**
@@ -839,20 +959,60 @@ function portsFor(ship, portType) {
   }
 }
 
-/** Weapons → desde ship.components, por component.type === 'weapons'. Sin link por ítem. */
+/**
+ * Weapons → las armas REALES de la nave, desde ship.weaponry.fixed_weapons.weapons
+ * (nombre + dps/alpha por arma), enriquecidas con size / grade / class / link
+ * desde el cache de vehicle-weapons. Si la nave no trae fixed_weapons (ej. solo
+ * torretas), cae a los hardpoints de ship.components, como antes.
+ */
 function weaponsFor(ship) {
   try {
+    const fixed = ship?.weaponry?.fixed_weapons?.weapons || [];
+    if (!fixed.length) return weaponMountsFor(ship);
+
+    return aggregate(
+      fixed,
+      (w) => w.name,
+      (w) => {
+        const full = lookupWeapon(w.name, w.alpha);
+        const info = { size: full?.size ?? null, grade: full?.grade ?? null };
+        return {
+          name: w.name,
+          size: info.size,
+          gradeLabel: gradeLabel(info.grade),
+          sizeGradeLine: buildSizeGradeLine(info),
+          statsLine: weaponStatsLine(w),
+          class: full?.class ?? null,
+          uuid: full?.uuid ?? null,
+          class_name: full?.class_name ?? null,
+          link: full?.link ?? null,
+        };
+      }
+    );
+  } catch (e) {
+    console.error('Unexpected Error: ', e);
+    return [];
+  }
+}
+
+/** Fallback: hardpoints de armas desde ship.components (type 'weapons'). Sin link por ítem. */
+function weaponMountsFor(ship) {
+  try {
     const items = (ship?.components || []).filter((c) => c.type === 'weapons');
-    return items.map((c) => ({
-      name: c.name,
-      size: c.size ?? null,
-      gradeLabel: gradeLabel(c.grade),
-      sizeGradeLine: buildSizeGradeLine(c),
-      class: lookupCachedComponent(c)?.class ?? null,
-      class_name: c.class_name || null,
-      count: c.mounts || 1,
-      link: null,
-    }));
+    return items.map((c) => {
+      // components[].size viene como string ("4"); el filtro de Size compara contra números.
+      const size = c.size === '' || c.size == null || Number.isNaN(Number(c.size)) ? null : Number(c.size);
+      return {
+        name: c.name,
+        size,
+        gradeLabel: gradeLabel(c.grade),
+        sizeGradeLine: buildSizeGradeLine(c),
+        class: lookupCachedComponent(c)?.class ?? null,
+        class_name: c.class_name || null,
+        count: c.mounts || 1,
+        link: null,
+      };
+    });
   } catch (e) {
     console.error('Unexpected Error: ', e);
     return [];
@@ -992,6 +1152,7 @@ const detailPurchaseLocations = computed(() => {
 onMounted(() => {
   try {
     fetchComponentCache();
+    fetchWeaponCache();
     fetchCatalog();
   } catch (e) {
     console.error('Unexpected Error: ', e);
@@ -1205,6 +1366,15 @@ onMounted(() => {
   opacity: 0.6;
 }
 
+.columns-wrapper {
+  min-width: 180px;
+}
+
+.extra-value {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Panel de detalle (Drawer) ──────────────────────── */
 .item-detail-drawer {
   width: 380px !important;
@@ -1340,5 +1510,69 @@ onMounted(() => {
   margin: 0;
 }
 
-.item-detail-drawer { width: 450px !important; } .detail-tags-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.75rem 0; } .detail-section-title { font-size: 0.95rem; font-weight: 600; margin: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem; color: var(--p-primary-color, #3b82f6); } .detail-subsection-title { font-size: 0.85rem; font-weight: 600; margin: 0.75rem 0 0.4rem 0; color: var(--p-text-muted-color, #94a3b8); } .resistance-section { margin-top: 0.5rem; } .res-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; } .res-item { background: var(--p-content-background, rgba(255, 255, 255, 0.03)); border: 1px solid var(--p-content-border-color, rgba(255, 255, 255, 0.08)); padding: 0.4rem 0.6rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; } .res-label { font-size: 0.8rem; color: var(--p-text-muted-color, #94a3b8); } .res-value { font-size: 0.85rem; font-weight: 600; } .detail-actions { margin-top: 1rem; } .w-full { width: 100%; }
+.item-detail-drawer {
+  width: 450px !important;
+}
+
+.detail-tags-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0;
+}
+
+.detail-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--p-primary-color, #3b82f6);
+}
+
+.detail-subsection-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.4rem 0;
+  color: var(--p-text-muted-color, #94a3b8);
+}
+
+.resistance-section {
+  margin-top: 0.5rem;
+}
+
+.res-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.res-item {
+  background: var(--p-content-background, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--p-content-border-color, rgba(255, 255, 255, 0.08));
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.res-label {
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color, #94a3b8);
+}
+
+.res-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.detail-actions {
+  margin-top: 1rem;
+}
+
+.w-full {
+  width: 100%;
+}
 </style>

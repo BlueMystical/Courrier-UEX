@@ -107,7 +107,7 @@ function createWindow(id, route = '/', options = {}) {
                 ...responseHeaders,
                 'Content-Security-Policy': [
                     "default-src 'self';" +
-                    "img-src 'self' data: https://*.uexcorp.space https://media.robertsspaceindustries.com https://robertsspaceindustries.com;" +
+                    "img-src 'self' data: https://*.uexcorp.space https://media.robertsspaceindustries.com https://robertsspaceindustries.com https://media.starcitizen.tools https://*.starcitizen.tools;" +
                     "script-src 'self';" +
                     "style-src 'self' 'unsafe-inline';" +
                     "connect-src 'self' https://api.uexcorp.uk https://cdn.uexcorp.space;"

@@ -34,7 +34,8 @@ export function getFeatureMenu({ isLoggedIn, onRequireLogin, shortcuts = {} } = 
             items: [
                 { label: 'Trade Routes', icon: 'pi pi-angle-right', route: '/buysell/routes' },
                 { label: 'Cargo Mission Planner', icon: 'pi pi-angle-right', route: '/utilities/hauling' },
-                { label: 'Ship Components', icon: 'pi pi-angle-right', route: '/tools/ship-components' }
+                { label: 'Ship Components', icon: 'pi pi-angle-right', route: '/tools/ship-components' },
+                { label: 'Market Analysis', icon: 'pi pi-angle-right', route: '/tools/market-analysis' }  // <-- agregar esta línea
             ]
         },
         {

@@ -44,6 +44,10 @@ const routes = [
     path: '/tools/ship-components', name: 'ShipComponents', component: () => import('./views/Tools/ShipComponents.vue'),
     meta: { title: 'Ship Components' }
   },
+   {
+    path: '/tools/market-analysis', name: 'MarketAnalysis', component: () => import('./views/Tools/MarketAnalysis.vue'),
+    meta: { title: 'Market Analysis' }
+  },
   // ---------------------------------------  
   // otras rutas aquí
   {

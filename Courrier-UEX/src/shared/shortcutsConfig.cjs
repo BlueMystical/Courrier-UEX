@@ -3,7 +3,7 @@
 
 // FUENTE DE VERDAD — edita solo este archivo, luego copia los datos al .js
 const shortcutsConfig = [
-  { key: 'commodities',       label: 'Commodities',         route: '/buysell/comodities', icon: 'pi pi-chart-bar', defaultShortcut: 'Ctrl+Alt+C' },
+  { key: 'commodities',       label: 'Commodities',         route: '/buysell/comodities', icon: 'pi pi-chart-bar', defaultShortcut: 'Ctrl+Alt+N' },
   { key: 'items',             label: 'Items',               route: '/buysell/items',      icon: 'pi pi-tag',       defaultShortcut: 'Ctrl+Alt+I' },
   { key: 'vehicles',          label: 'Vehicles',            route: '/buysell/vehicles',   icon: 'pi pi-car',       defaultShortcut: 'Ctrl+Alt+V' },
   { key: 'settings',          label: 'Settings',            route: '/settings',           icon: 'pi pi-cog',       defaultShortcut: 'Ctrl+Alt+S' },

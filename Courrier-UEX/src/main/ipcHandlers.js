@@ -309,21 +309,21 @@ function registerIpcHandlers({ createTray, destroyTray, registerShortcuts, initS
                 resolve(result)
             }
 
-            console.log('[net:fetchJson] →', url)
+            //console.log('[net:fetchJson] →', url)
 
             const request = net.request({ method: 'GET', url })
             request.setHeader('User-Agent', 'Courrier-UEX/1.0 (Electron)')
             request.setHeader('Accept', 'application/json')
 
             const timeout = setTimeout(() => {
-                console.error('[net:fetchJson] Timeout after 45s:', url)
+                //console.error('[net:fetchJson] Timeout after 45s:', url)
                 request.abort()
                 finish({ success: false, error: 'Request timed out after 45s' })
             }, 45000)
 
             const chunks = []
             request.on('response', (response) => {
-                console.log('[net:fetchJson] ← status', response.statusCode, url)
+                //console.log('[net:fetchJson] ← status', response.statusCode, url)
                 response.on('data', (chunk) => chunks.push(chunk))
                 response.on('end', () => {
                     clearTimeout(timeout)

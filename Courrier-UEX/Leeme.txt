@@ -39,8 +39,13 @@ https://uexcorp.space/api/documentation/id/post_data_submit/
 
 C:\Program Files\Roberts Space Industries\StarCitizen\LIVE\screenshots
 
-Github Courrier-UEX:    https://github.com/BlueMystical/Courrier-UEX
-Discord Courrier-UEX:   https://discord.gg/Bz6UkBDPMp
+Github Courrier-UEX:        https://github.com/BlueMystical/Courrier-UEX
+Discord Courrier-UEX:       https://discord.gg/Bz6UkBDPMp
+Download Latest Release:    https://github.com/BlueMystical/Courrier-UEX/releases/latest
+----------------------------------------------------------------
+Agregar Nuevas Views:
+- agregar entrada al Router: src/renderer/router.js
+- agregar entrada al MEnu en:  src/renderer/helpers/menuConfig.js
 ----------------------------------------------------------------
 
 

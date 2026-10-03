@@ -229,18 +229,17 @@ const handleQuantityChange = (event) => {
 const formatLocation = (item) => {
     const parts = [];
     if (item.star_system_name) parts.push(item.star_system_name);
-    if (item.moon_name) {
-        parts.push(item.moon_name);
-    } else if (item.planet_name && item.planet_name !== item.star_system_name) {
+    if (item.planet_name && item.planet_name !== item.star_system_name) {
         parts.push(item.planet_name);
     }
+    if (item.moon_name) parts.push(item.moon_name);
     if (item.space_station_name) parts.push(item.space_station_name);
     if (item.city_name) {
         parts.push(item.city_name);
     } else if (item.outpost_name) {
         parts.push(item.outpost_name);
     }
-    return parts.join(' > ');
+    return parts.join(' -> ');
 };
 
 // Commodities y star systems ya NO se fetchean acá: viven en el cache

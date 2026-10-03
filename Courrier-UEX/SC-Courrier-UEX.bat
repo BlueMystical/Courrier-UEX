@@ -10,4 +10,6 @@ start "" explorer .
 rem 3. Open current folder in VS Code
 start "Courrier-UEX Dev Console" code .
 
+npm run desa
+
 exit 0

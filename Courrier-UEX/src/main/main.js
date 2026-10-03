@@ -172,13 +172,13 @@ app.whenReady().then(async () => {
     // NETWORK HEADER SPOOF (unchanged)
     // ─────────────────────────────
     session.defaultSession.webRequest.onBeforeSendHeaders(
-      { urls: [ 
-        'https://\*.uexcorp.space/\*', 
-        'https://\*.uexcorp.uk/\*', 
-        'https://\*.robertsspaceindustries.com/\*', 
-        'https://robertsspaceindustries.com/\*', 
-        'https://\*.starcitizen.tools/\*' 
-      ] },
+    { urls: [
+      'https://*.uexcorp.space/*',
+      'https://*.uexcorp.uk/*',
+      'https://*.robertsspaceindustries.com/*',
+      'https://robertsspaceindustries.com/*',
+      'https://*.starcitizen.tools/*'
+    ] },
       (details, callback) => {
         const headers = { ...details.requestHeaders }
         headers['User-Agent'] =
@@ -204,15 +204,6 @@ app.whenReady().then(async () => {
       }
     )
 
-    // Inyectar o permitir la directiva img-src para las imágenes de la Wiki 
-    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-      const responseHeaders = { ...details.responseHeaders }
-      // Ajusta la cabecera CSP en las respuestas cargadas por Electron
-      responseHeaders['Content-Security-Policy'] = [ 
-        "default-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: https://\*.uexcorp.space https://media.robertsspaceindustries.com https://robertsspaceindustries.com https://media.starcitizen.tools https://\*.starcitizen.tools;" 
-      ]
-      callback({ responseHeaders })
-    })
 
     const startMinimized = settingsHelper.getSetting('settings/tray/startMinimized') ?? false
     const minimizeToTray = settingsHelper.getSetting('settings/tray/minimizeToTray') ?? false
